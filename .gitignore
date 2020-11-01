@@ -1,0 +1,3 @@
+*.swp
+.buildozer
+/bin
