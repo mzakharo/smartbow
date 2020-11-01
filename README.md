@@ -1,6 +1,4 @@
-## Setup
-
-#setup android adb
+#Setup android adb
 lsusb  to get vendor/product
 cp 51-android.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules
@@ -10,7 +8,6 @@ export PATH=$HOME/.local/bin/:$HOME/.buildozer/android/platform/android-sdk/plat
 
 # Prep for buildozer (from https://buildozer.readthedocs.io/en/latest/installation.html#android-on-ubuntu-20-04-64bit)
 - sudo apt install -y git zip unzip openjdk-8-jdk python3-pip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev
-
 -sudo apt install ccache
 
 # Conda on Ubuntu 20.04 install
@@ -20,6 +17,8 @@ export PATH=$HOME/.local/bin/:$HOME/.buildozer/android/platform/android-sdk/plat
  - conda install cython
  - pip install buildozer
 
-## build the app
- - buildozer android debug
+## run the app
+- python main.py
 
+## build the Android app
+ - buildozer android debug
