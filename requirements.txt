@@ -1,4 +1,4 @@
-Cython
+buildozer
 virtualenv
 plyer
 kivy_garden.graph

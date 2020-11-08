@@ -15,10 +15,14 @@ export PATH=$HOME/.local/bin/:$HOME/.buildozer/android/platform/android-sdk/plat
  - sh ./Miniconda3-py38-Linux-x86_64.sh
  - conda install -c conda-forge kivy
  - conda install cython
- - pip install buildozer
+ - pip install -r  requirements.txt
 
 ## run the app
 - python main.py
 
 ## build the Android app
- - buildozer android debug
+ - make
+
+##log
+ - ./logcat.sh
+
