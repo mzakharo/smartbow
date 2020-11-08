@@ -4,14 +4,17 @@ import time
 from collections import deque
 from random import random
 
-LEN = 1000
+ACCELEROMETER_BUFFER_LEN = 1000
+
+
 
 if platform == 'android':
     from plyer.platforms.android import activity
     from jnius import autoclass
+    from android.runnable import run_on_ui_thread
+
     #workaround, see https://github.com/kivy/pyjnius/issues/137#issuecomment-248673727
     autoclass('org.jnius.NativeInvocationHandler')
-    from android.runnable import run_on_ui_thread
 else:
     def run_on_ui_thread(func):
         def wrapper(args):
@@ -23,10 +26,8 @@ class LockScreen():
     def __init__(self):
         if platform != 'android':
             return
-        Context = autoclass('android.content.Context')
         self.params = autoclass('android.view.WindowManager$LayoutParams')
         self.window = activity.getWindow()
-        self.live = True
 
     @run_on_ui_thread
     def set(self):
@@ -123,7 +124,7 @@ class AccelerometerDummy:
 
 class Accelerometer:
     def __init__(self):
-        self.q = deque([(0, 0, 0)] * LEN, maxlen = LEN)
+        self.q = deque([(0, 0, 0)] * ACCELEROMETER_BUFFER_LEN, maxlen = ACCELEROMETER_BUFFER_LEN)
         self.lock = threading.Lock()
 
     def enable(self):

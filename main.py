@@ -9,7 +9,7 @@ import time
 import threading
 import numpy as np
 
-from compat import accelerometer, LockScreen, LEN
+from compat import accelerometer, LockScreen
 
 class Logic(BoxLayout):
     def __init__(self, **kwargs):
@@ -43,7 +43,7 @@ class Logic(BoxLayout):
         gr = self.ids.graph
         gr.ymin = int(points.min()-1)
         gr.ymax = max( 1, int(points.max())+1)
-        gr.xmax = LEN
+        gr.xmax = points.shape[1]
         gr.y_ticks_major = max(1 , (gr.ymax - gr.ymin) / 5)
 
         self.px.points = enumerate(points[0])
