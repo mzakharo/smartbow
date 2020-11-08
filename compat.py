@@ -1,6 +1,10 @@
 from plyer.utils import platform
-from plyer import accelerometer
 from random import random
+import threading
+import time
+from collections import deque
+
+LEN = 500
 
 if platform == 'android':
     from plyer.platforms.android import activity
@@ -37,15 +41,69 @@ class LockScreen():
         self.window.clearFlags(self.params.FLAG_KEEP_SCREEN_ON)
 
 
+if platform == 'android':
+    from jnius import PythonJavaClass, java_method, autoclass, cast
+    from plyer.platforms.android import activity
+
+    Context = autoclass('android.content.Context')
+    Sensor = autoclass('android.hardware.Sensor')
+    SensorManager = autoclass('android.hardware.SensorManager')
+
+
+    class AccelerometerSensorListener(PythonJavaClass):
+        __javainterfaces__ = ['android/hardware/SensorEventListener']
+
+        def __init__(self):
+            super().__init__()
+            self.SensorManager = cast(
+                'android.hardware.SensorManager',
+                activity.getSystemService(Context.SENSOR_SERVICE)
+            )
+            self.sensor = self.SensorManager.getDefaultSensor(
+                Sensor.TYPE_ACCELEROMETER
+            )
+            self.last_time = time.time()
+            self.cnt = 0
+
+        def enable(self, q, lock):
+            self.lock = lock
+            self.q = q
+            self.SensorManager.registerListener(
+                self, self.sensor,
+                SensorManager.SENSOR_DELAY_FASTEST
+            )
+
+        def disable(self):
+            self.SensorManager.unregisterListener(self, self.sensor)
+
+        @java_method('(Landroid/hardware/SensorEvent;)V')
+        def onSensorChanged(self, event):
+            self.cnt += 1
+            with self.lock:
+                self.q.append(event.values)
+            if time.time() - self.last_time > 1:
+                print(f'rate {self.cnt}/sec')
+                self.cnt = 0
+                self.last_time = time.time()
+
+
+        @java_method('(Landroid/hardware/Sensor;I)V')
+        def onAccuracyChanged(self, sensor, accuracy):
+            # Maybe, do something in future?
+            pass
+
 class Accelerometer:
+    def __init__(self):
+        self.q = deque([[random(), random(), random()] for _ in  range(LEN)]*LEN, maxlen = LEN)
+        self.lock = threading.Lock()
+
     def enable(self):
         if platform == 'android':
-            accelerometer.enable()
+            self.acc = AccelerometerSensorListener()
+            self.acc.enable(self.q, self.lock)
     def disable(self):
         if platform == 'android':
-            accelerometer.disable()
-    def get_acceleration(self):
-        return accelerometer.acceleration if platform == 'android' else (random(), random(), random())
+            self.acc.disable()
 
 acc = Accelerometer()
 

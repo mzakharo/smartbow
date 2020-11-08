@@ -6,18 +6,14 @@ from kivy_garden.graph import MeshLinePlot
 from kivy.clock import Clock
 
 import time
-from collections import deque
 import threading
+import numpy as np
 
-from compat import acc, LockScreen
+from compat import acc, LockScreen, LEN
 
 class Worker:
     def __init__(self):
-        self.xq = deque( maxlen = 500)
-        self.yq = deque( maxlen = 500)
-        self.zq = deque( maxlen = 500)
-
-        self.lock = threading.Lock()
+        pass
 
     def start(self):
         self.run = True
@@ -32,7 +28,8 @@ class Worker:
         last_time = time.time()
         acc.enable()
         while self.run:
-            time.sleep(0.008) #100hz ish
+            time.sleep(1)
+            '''
             x, y, z = acc.get_acceleration()
             if x is not None:
                 cnt +=1
@@ -44,6 +41,7 @@ class Worker:
                 print(f'rate {cnt}/sec')
                 last_time = time.time()
                 cnt = 0
+            '''
         acc.disable()
 
 
@@ -62,11 +60,12 @@ class Logic(BoxLayout):
         self.w.start()
 
         if self.first_run:
+            self.first_run = False
             self.ids.graph.add_plot(self.px)
             self.ids.graph.add_plot(self.py)
             self.ids.graph.add_plot(self.pz)
 
-        Clock.schedule_interval(self.get_value, 0.150) #Nexus 6P cant go any faster
+        Clock.schedule_interval(self.get_value, 0.5)
 
     def stop(self):
         print('stop')
@@ -74,13 +73,18 @@ class Logic(BoxLayout):
         self.w.stop()
 
     def get_value(self, dt):
-        with self.w.lock:
-            lx = list(enumerate(self.w.xq))
-            ly = list(enumerate(self.w.yq))
-            lz = list(enumerate(self.w.zq))
-        self.px.points = lx
-        self.py.points = ly
-        self.pz.points = lz
+        with acc.lock:
+            points  = np.array([acc.q]).T
+        gr = self.ids.graph
+
+        gr.ymin = int(points.min())
+        gr.ymax = max( 1, int(points.max()))
+        gr.xmax = LEN
+        gr.y_ticks_major = max(1 , (gr.ymax - gr.ymin) / 5)
+
+        self.px.points = enumerate(points[0])
+        self.py.points = enumerate(points[1])
+        self.pz.points = enumerate(points[2])
 
 
 class SmartBow(App): 
