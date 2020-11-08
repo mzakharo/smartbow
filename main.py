@@ -41,8 +41,8 @@ class Logic(BoxLayout):
         with accelerometer.lock:
             points  = np.array(accelerometer.q).T
         gr = self.ids.graph
-        gr.ymin = int(points.min()-1)
-        gr.ymax = max( 1, int(points.max())+1)
+        gr.ymax = max(1, int(points.max())+1)
+        gr.ymin = min(int(points.min()-1), gr.ymax-1)
         gr.xmax = points.shape[1]
         gr.y_ticks_major = max(1 , (gr.ymax - gr.ymin) / 5)
 
