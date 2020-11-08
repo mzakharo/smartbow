@@ -1,2 +1,4 @@
 Cython
 virtualenv
+plyer
+kivy_garden.graph

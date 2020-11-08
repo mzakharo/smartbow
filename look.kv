@@ -1,0 +1,24 @@
+Logic:
+    BoxLayout:
+        orientation: "vertical"
+        BoxLayout:
+            size_hint: [1, .9]
+            Graph:
+                id: graph
+                xlabel: ""
+                ylabel: "Level"
+                xmax : 500
+                ymin : -20
+                ymax : 20
+        BoxLayout:
+            size_hint: [1, .1]
+            orientation: "horizontal"
+            Button:
+                text: "START"
+                bold: True
+                on_press: root.start()
+            Button:
+                text: "STOP"
+                bold: True
+                on_press: root.stop()
+
