@@ -1,10 +1,10 @@
 from plyer.utils import platform
-from random import random
 import threading
 import time
 from collections import deque
+from random import random
 
-LEN = 500
+LEN = 1000
 
 if platform == 'android':
     from plyer.platforms.android import activity
@@ -92,19 +92,49 @@ if platform == 'android':
             # Maybe, do something in future?
             pass
 
+class AccelerometerDummy:
+    def __init__(self):
+        pass
+
+    def enable(self, q, lock):
+        self.lock = lock
+        self.q = q
+        self.run = True
+        do_th = threading.Thread(target=self.do, daemon=True)
+        do_th.start()
+
+    def disable(self):
+        self.run = False
+
+    def do(self):
+        cnt = 0
+        last_time = time.time()
+        while self.run:
+            time.sleep(1/400)
+            data = [random() - 2 , random(), random() + 2 ]
+            cnt +=1
+            with self.lock:
+                self.q.append(data)
+            if time.time() - last_time > 1:
+                print(f'rate {cnt}/sec')
+                last_time = time.time()
+                cnt = 0
+
+
 class Accelerometer:
     def __init__(self):
-        self.q = deque([[random(), random(), random()] for _ in  range(LEN)]*LEN, maxlen = LEN)
+        self.q = deque([(0, 0, 0)] * LEN, maxlen = LEN)
         self.lock = threading.Lock()
 
     def enable(self):
         if platform == 'android':
             self.acc = AccelerometerSensorListener()
-            self.acc.enable(self.q, self.lock)
+        else:
+            self.acc = AccelerometerDummy()
+        self.acc.enable(self.q, self.lock)
     def disable(self):
-        if platform == 'android':
-            self.acc.disable()
+        self.acc.disable()
 
-acc = Accelerometer()
+accelerometer = Accelerometer()
 
 
