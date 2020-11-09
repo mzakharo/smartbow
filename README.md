@@ -26,3 +26,8 @@ export PATH=$HOME/.local/bin/:$HOME/.buildozer/android/platform/android-sdk/plat
 ##log
  - ./logcat.sh
 
+
+##Keystore (release app)
+ - mkdir -p ./keystore
+ - keytool -genkey -v -keystore ./keystore/this.keystore -alias cb-play -keyalg RSA -keysize 2048
+ - password : 123456

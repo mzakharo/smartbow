@@ -3,6 +3,7 @@ import threading
 import time
 from collections import deque
 from random import random
+from statistics import mean
 
 ACCELEROMETER_BUFFER_LEN = 1000
 
@@ -65,6 +66,8 @@ if platform == 'android':
             )
             self.last_time = time.time()
             self.cnt = 0
+            self.rate = 0
+            self.rate_q = deque([400], maxlen=10)
 
         def enable(self, q, lock):
             self.lock = lock
@@ -83,6 +86,9 @@ if platform == 'android':
             with self.lock:
                 self.q.append(event.values)
             if time.time() - self.last_time > 1:
+                self.rate = self.cnt
+                self.rate_q.append(self.cnt)
+                self.rate = mean(self.rate_q)
                 print(f'rate {self.cnt}/sec')
                 self.cnt = 0
                 self.last_time = time.time()
@@ -95,6 +101,7 @@ if platform == 'android':
 
 class AccelerometerDummy:
     def __init__(self):
+        self.rate = 0
         pass
 
     def enable(self, q, lock):
@@ -117,7 +124,8 @@ class AccelerometerDummy:
             with self.lock:
                 self.q.append(data)
             if time.time() - last_time > 1:
-                print(f'rate {cnt}/sec')
+                self.rate = cnt
+                print(f'rate {self.rate}/sec')
                 last_time = time.time()
                 cnt = 0
 
@@ -135,6 +143,10 @@ class Accelerometer:
         self.acc.enable(self.q, self.lock)
     def disable(self):
         self.acc.disable()
+
+    @property
+    def rate(self):
+        return self.acc.rate
 
 accelerometer = Accelerometer()
 

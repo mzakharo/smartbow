@@ -2,3 +2,4 @@ buildozer
 virtualenv
 plyer
 kivy_garden.graph
+influxdb-client
