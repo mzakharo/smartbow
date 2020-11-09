@@ -25,11 +25,12 @@ INFLUX_URL = "https://us-central1-1.gcp.cloud2.influxdata.com"
 INFLUX_TOKEN = 'qpoMEOTPwuMHxwlEggRAn8OSRLyAQIpl179uD2jsB0I9bNCgjbNPSbpwt2b_KDRvq-hynAM0ZZcw6t2-1Hevnw=='
 ORG = 'd5c111f1b4fc56c1'
 BUCKET = 'main'
-
+from urllib3 import Retry
 
 class Worker:
     def __init__(self):
-        self.client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN)
+        retries = Retry(connect=5, read=2, redirect=5)
+        self.client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, timeout=10, retries=retries)
         self.write_api = self.client.write_api(write_options=SYNCHRONOUS) #ASYNC does not work due to sem_ impoementation missing
         self.id = uniqueid.id
         self.q = Queue()
