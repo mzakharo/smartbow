@@ -17,15 +17,8 @@ from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
 from queue import Queue
 
-#accelerometer threshold detecting shot being fired
-SHOT_THRESH = 99
-POLL_RATE = 0.1 #latency on detection vs cpu/usage
-
-INFLUX_URL = "https://us-central1-1.gcp.cloud2.influxdata.com" 
-INFLUX_TOKEN = 'qpoMEOTPwuMHxwlEggRAn8OSRLyAQIpl179uD2jsB0I9bNCgjbNPSbpwt2b_KDRvq-hynAM0ZZcw6t2-1Hevnw=='
-ORG = 'd5c111f1b4fc56c1'
-BUCKET = 'main'
 from urllib3 import Retry
+from config import *
 
 class Worker:
     def __init__(self):
@@ -61,6 +54,8 @@ class Logic(BoxLayout):
         self.first_run = True
         self.shot_count = 0
         self.worker = Worker()
+        self.message = 'started'
+        Clock.schedule_once(self.notify)
 
     def start(self):
         print('start')
@@ -82,6 +77,9 @@ class Logic(BoxLayout):
         Clock.unschedule(self.get_value)
         accelerometer.disable()
 
+    def notify(self, dt):
+        notification.notify(title='>-------->', message=self.message)           
+
     def get_value(self, dt):
         with accelerometer.lock:
             points  = np.array(accelerometer.q).T
@@ -91,7 +89,8 @@ class Logic(BoxLayout):
             self.shot_count += 1
             self.shot = pmax
             self.shot_time = this_time
-            notification.notify(title='>-------->', message=f'{datetime.datetime.now()}: shot # {self.shot_count}')
+            self.message=f'{datetime.datetime.now()}: shot # {self.shot_count}'
+            Clock.schedule_once(self.notify)
             point = Point("arrow").tag('id', self.worker.id).field('shot', self.shot).time(int(self.shot_time*10**9), WritePrecision.NS)
             self.worker.q.put(('point', point))
             self.half_point = this_time + (points.shape[1] / accelerometer.rate * 0.5)
@@ -104,13 +103,13 @@ class Logic(BoxLayout):
 
         self.update_cnt += 1
         #slow down graph update to lower cpu usage
-        if self.update_cnt == 4 or force_update: 
+        if self.update_cnt == GRAPH_RATE or force_update: 
             self.update_cnt = 0
             if force_update:
                 self.update_cnt = -int(5 / POLL_RATE) #freeze graph after shot
             gr = self.ids.graph
-            gr.ymax = max(1, int(points.max() + 1))
-            gr.ymin = min(int(points.min()-1), gr.ymax-1)
+            gr.ymax = min(GRAPH_LIMIT, max(1, int(points.max() + 1)))
+            gr.ymin = max(-GRAPH_LIMIT, min(int(points.min()-1), gr.ymax-1))
             gr.xmax = points.shape[1]
             gr.y_ticks_major = max(1 , (gr.ymax - gr.ymin) / 5)
 

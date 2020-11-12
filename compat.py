@@ -5,8 +5,7 @@ from collections import deque
 from random import random
 from statistics import mean
 
-ACCELEROMETER_BUFFER_LEN = 1000
-
+from config import *
 
 
 if platform == 'android':
