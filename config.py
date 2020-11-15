@@ -4,10 +4,10 @@ ORG = 'd5c111f1b4fc56c1'
 BUCKET = 'main'
 
 POLL_RATE = 0.1 #latency on detection vs cpu/usage
-GRAPH_RATE = 2 #   #number of instances of poll rate
-GRAPH_LIMIT = 33  #acceleromter display
+GRAPH_RATE = 5 #   #number of instances of poll rate
+GRAPH_LIMIT = 4000  #acceleromter display
 
 ACCELEROMETER_BUFFER_LEN = 300 #point buffer length
-SHOT_THRESH = 120 #when to detect a shot
+SHOT_THRESH = 60 #when to detect a shot
 
 
