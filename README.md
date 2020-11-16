@@ -1,3 +1,9 @@
+#  Project description
+
+* This is an Android app to attach a smartphone to a compound bow, and use smartphone's sensors to count arrows shot, as well as review shot stability.
+
+
+
 # Setup android adb
 ```
 lsusb  to get vendor/product
