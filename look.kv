@@ -1,17 +1,20 @@
-Logic:
+<MainScreen>:
     BoxLayout:
         orientation: "vertical"
         BoxLayout:
             size_hint: [1, .1]
             orientation: "horizontal"
             Button:
-                text: "START"
+                text: "To screen 2"
                 bold: True
-                on_press: root.start()
+                on_press:
+                    root.manager.transition.direction = 'left'
+                    root.manager.current = 'secondscreen'
             Button:
+                id: toggle
                 text: "STOP"
                 bold: True
-                on_press: root.stop()
+                on_press: root.on_press()
         BoxLayout:
             size_hint: [1, .9]
             Graph:
@@ -19,3 +22,30 @@ Logic:
                 y_grid_label : True
                 y_grid: True
 
+<SecondScreen>:
+    BoxLayout:
+        orientation: "vertical"
+        BoxLayout:
+            size_hint: [1, .1]
+            orientation: "horizontal"
+            Button:
+                text: "To main"
+                bold: True
+                on_press:
+                    root.manager.transition.direction = 'right'
+                    root.manager.current = 'main'
+            Button:
+                id: toggle
+                text: "STOP"
+                bold: True
+                on_press: root.on_press()
+        BoxLayout:
+            size_hint: [1, .9]
+            Graph:
+                id: graph
+                y_grid_label : True
+                y_grid: True
+
+Screen:
+    ScreenManager:
+        id: sm

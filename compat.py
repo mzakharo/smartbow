@@ -63,14 +63,14 @@ if platform == 'android':
             self.sensor = self.SensorManager.getDefaultSensor(
                 Sensor.TYPE_ACCELEROMETER
             )
-            self.last_time = time.time()
             self.cnt = 0
             self.rate = 0
-            self.rate_q = deque([400], maxlen=10)
+            self.rate_q = deque([DEFAULT_ACCELEROMETER_RATE], maxlen=10)
 
         def enable(self, q, lock):
             self.lock = lock
             self.q = q
+            self.last_time = time.time()
             self.SensorManager.registerListener(
                 self, self.sensor,
                 SensorManager.SENSOR_DELAY_FASTEST
@@ -81,16 +81,15 @@ if platform == 'android':
 
         @java_method('(Landroid/hardware/SensorEvent;)V')
         def onSensorChanged(self, event):
-            self.cnt += 1
             with self.lock:
+                self.cnt += 1
                 self.q.append(event.values)
-            if time.time() - self.last_time > 1:
-                self.rate = self.cnt
-                self.rate_q.append(self.cnt)
-                self.rate = mean(self.rate_q)
-                print(f'rate {self.cnt}/sec')
-                self.cnt = 0
-                self.last_time = time.time()
+                t = time.time()
+                if t - self.last_time > 1:
+                    self.rate_q.append(self.cnt)
+                    self.rate = mean(self.rate_q)
+                    self.last_time = t
+                    self.cnt = 0
 
 
         @java_method('(Landroid/hardware/Sensor;I)V')
@@ -117,16 +116,16 @@ class AccelerometerDummy:
         cnt = 0
         last_time = time.time()
         while self.run:
-            time.sleep(1/400)
+            time.sleep(1/DEFAULT_ACCELEROMETER_RATE)
             data = [random() - 2 , random(), random() + 2 ]
-            cnt +=1
             with self.lock:
                 self.q.append(data)
-            if time.time() - last_time > 1:
-                self.rate = cnt
-                print(f'rate {self.rate}/sec')
-                last_time = time.time()
-                cnt = 0
+                cnt +=1
+                t = time.time()
+                if t - last_time > 1:
+                    self.rate = cnt
+                    last_time = t
+                    cnt = 0
 
 
 class Accelerometer:

@@ -7,6 +7,7 @@ POLL_RATE = 0.1 #latency on detection vs cpu/usage
 GRAPH_RATE = 5 #   #number of instances of poll rate
 GRAPH_LIMIT = 4000  #acceleromter display
 
+DEFAULT_ACCELEROMETER_RATE = 500  #starting guess of acceleromter rate
 ACCELEROMETER_BUFFER_LEN = 300 #point buffer length
 SHOT_THRESH = 60 #when to detect a shot
 
