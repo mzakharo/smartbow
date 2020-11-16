@@ -51,21 +51,15 @@ if platform == 'android':
     SensorManager = autoclass('android.hardware.SensorManager')
 
 
-    class AccelerometerSensorListener(PythonJavaClass):
+    class SensorListener(PythonJavaClass):
         __javainterfaces__ = ['android/hardware/SensorEventListener']
 
         def __init__(self):
             super().__init__()
-            self.SensorManager = cast(
-                'android.hardware.SensorManager',
-                activity.getSystemService(Context.SENSOR_SERVICE)
-            )
-            self.sensor = self.SensorManager.getDefaultSensor(
-                Sensor.TYPE_ACCELEROMETER
-            )
             self.cnt = 0
             self.rate = 0
             self.rate_q = deque([DEFAULT_ACCELEROMETER_RATE], maxlen=10)
+            self.values = [0.0, 0.0, 0.0]
 
         def enable(self, q, lock):
             self.lock = lock
@@ -83,10 +77,12 @@ if platform == 'android':
         def onSensorChanged(self, event):
             with self.lock:
                 self.cnt += 1
+                self.values = event.values
                 self.q.append(event.values)
                 t = time.time()
                 if t - self.last_time > 1:
                     self.rate_q.append(self.cnt)
+                    #print(f'{self.name}: {self.rate}')
                     self.rate = mean(self.rate_q)
                     self.last_time = t
                     self.cnt = 0
@@ -97,7 +93,56 @@ if platform == 'android':
             # Maybe, do something in future?
             pass
 
-class AccelerometerDummy:
+    class AccelerometerSensorListener(SensorListener):
+        def __init__(self):
+            super().__init__()
+            self.name = 'acc'
+            self.SensorManager = cast(
+                'android.hardware.SensorManager',
+                activity.getSystemService(Context.SENSOR_SERVICE)
+            )
+            self.sensor = self.SensorManager.getDefaultSensor(
+                Sensor.TYPE_ACCELEROMETER
+            )
+
+    class MagnetometerSensorListener(SensorListener):
+        def __init__(self, acc):
+            super().__init__()
+            self.name = 'spat'
+            self.acc = acc
+            service = activity.getSystemService(Context.SENSOR_SERVICE)
+            self.SensorManager = cast('android.hardware.SensorManager', service)
+            self.sensor = self.SensorManager.getDefaultSensor(
+                Sensor.TYPE_MAGNETIC_FIELD)
+
+        @java_method('(Landroid/hardware/SensorEvent;)V')
+        def onSensorChanged(self, event):
+            with self.lock:
+                self.cnt += 1
+                self.values = event.values
+                t = time.time()
+
+                rotation = [0] * 9
+                inclination = [0] * 9
+                gravity = []
+                geomagnetic = []
+                gravity = self.acc.values
+                geomagnetic = event.values
+                ff_state = self.SensorManager.getRotationMatrix(rotation, inclination, gravity, geomagnetic )
+                if ff_state:
+                    values = [0, 0, 0]
+                    values = self.SensorManager.getOrientation(rotation, values)
+                    #print(values)
+                    self.q.append(values)
+                    if t - self.last_time > 1:
+                        self.rate_q.append(self.cnt)
+                        #print(f'{self.name}: {self.rate}')
+                        self.rate = mean(self.rate_q)
+                        self.last_time = t
+                        self.cnt = 0
+
+
+class Dummy:
     def __init__(self):
         self.rate = 0
         pass
@@ -127,24 +172,42 @@ class AccelerometerDummy:
                     last_time = t
                     cnt = 0
 
-
 class Accelerometer:
     def __init__(self):
         self.q = deque([(0, 0, 0)] * ACCELEROMETER_BUFFER_LEN, maxlen = ACCELEROMETER_BUFFER_LEN)
+        self.mag_q = deque([(0, 0, 0)] * ACCELEROMETER_BUFFER_LEN, maxlen = ACCELEROMETER_BUFFER_LEN)
         self.lock = threading.Lock()
+        self.mag_lock = threading.Lock()
+        self.started = False
 
     def enable(self):
+        if self.started:
+            return
         if platform == 'android':
             self.acc = AccelerometerSensorListener()
+            self.mag = MagnetometerSensorListener(self.acc)
         else:
-            self.acc = AccelerometerDummy()
+            self.acc = Dummy()
+            self.mag = Dummy()
+
         self.acc.enable(self.q, self.lock)
+        self.mag.enable(self.mag_q, self.mag_lock)
+        self.started = True
+
     def disable(self):
+        if not self.started:
+            return
         self.acc.disable()
+        self.mag.disable()
+        self.started = False
 
     @property
     def rate(self):
         return self.acc.rate
+    @property
+    def mag_rate(self):
+        return self.mag.rate
+
 
 accelerometer = Accelerometer()
 

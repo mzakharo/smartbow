@@ -67,7 +67,6 @@ class MainScreen(Screen):
 
     def start(self):
         print('start')
-        accelerometer.enable()
 
         if self.first_run:
             self.first_run = False
@@ -84,7 +83,6 @@ class MainScreen(Screen):
     def stop(self):
         print('stop')
         Clock.unschedule(self.get_value)
-        accelerometer.disable()
         self.enabled = False
 
     def on_press(self):
@@ -159,8 +157,6 @@ class SecondScreen(Screen):
 
     def start(self):
         print('start')
-        accelerometer.enable()
-
         if self.first_run:
             self.first_run = False
             self.ids.graph.add_plot(self.px)
@@ -176,7 +172,6 @@ class SecondScreen(Screen):
     def stop(self):
         print('stop')
         Clock.unschedule(self.get_value)
-        accelerometer.disable()
         self.enabled = False
 
     def on_press(self):
@@ -192,9 +187,10 @@ class SecondScreen(Screen):
 
     def get_value(self, dt):
         with accelerometer.lock:
-            points  = np.array(accelerometer.q).T
+            points  = np.array(accelerometer.mag_q).T
+            acc_points  = np.array(accelerometer.q).T
         this_time = time.time()
-        pmax = np.abs(points).max()
+        pmax = np.abs(acc_points).max()
         if pmax > SHOT_THRESH and (this_time- self.shot_time) > 4:
             self.shot_count += 1
             self.shot = pmax
@@ -222,7 +218,7 @@ class SecondScreen(Screen):
             gr.ymin = max(-GRAPH_LIMIT, min(int(points.min()-1), gr.ymax-1))
             gr.xmax = points.shape[1]
             gr.y_ticks_major = max(1 , (gr.ymax - gr.ymin) / 5)
-            gr.xlabel = f'Accelerometer {int(accelerometer.rate)} /sec'
+            gr.xlabel = f'Orientation {int(accelerometer.mag_rate)} /sec'
 
             self.px.points = enumerate(points[0])
             self.py.points = enumerate(points[1])
@@ -243,21 +239,21 @@ class SmartBow(App):
 
     def on_resume(self):
         self.lockscreen.set()
-        #self.main.start()
+        accelerometer.enable()
         return True
 
     def on_pause(self):
         self.lockscreen.unset()
-        #self.main.stop()
+        accelerometer.disable()
         return True
 
     def on_start(self):
         self.lockscreen = LockScreen()
         self.lockscreen.set()
-        #self.b.start()
+        accelerometer.enable()
 
     def on_stop(self):
-        #self.b.stop()
+        accelerometer.disable()
         return True
 
 if __name__ == "__main__":
