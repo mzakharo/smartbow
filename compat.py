@@ -4,6 +4,7 @@ import time
 from collections import deque
 from random import random
 from statistics import mean
+import numpy as np
 
 from config import *
 
@@ -54,11 +55,11 @@ if platform == 'android':
     class SensorListener(PythonJavaClass):
         __javainterfaces__ = ['android/hardware/SensorEventListener']
 
-        def __init__(self):
+        def __init__(self, default_rate):
             super().__init__()
             self.cnt = 0
             self.rate = 0
-            self.rate_q = deque([DEFAULT_ACCELEROMETER_RATE], maxlen=10)
+            self.rate_q = deque([default_rate], maxlen=10)
             self.values = [0.0, 0.0, 0.0]
 
         def enable(self, q, lock):
@@ -73,11 +74,31 @@ if platform == 'android':
         def disable(self):
             self.SensorManager.unregisterListener(self, self.sensor)
 
+        @java_method('(Landroid/hardware/Sensor;I)V')
+        def onAccuracyChanged(self, sensor, accuracy):
+            # Maybe, do something in future?
+            pass
+
+    class AccelerometerSensorListener(SensorListener):
+        def __init__(self):
+            super().__init__(default_rate=DEFAULT_ACCELEROMETER_RATE)
+            self.name = 'acc'
+            self.small_q = deque(maxlen=10)
+            self.SensorManager = cast(
+                'android.hardware.SensorManager',
+                activity.getSystemService(Context.SENSOR_SERVICE)
+            )
+            self.sensor = self.SensorManager.getDefaultSensor(
+                Sensor.TYPE_ACCELEROMETER
+            )
+
         @java_method('(Landroid/hardware/SensorEvent;)V')
         def onSensorChanged(self, event):
             with self.lock:
                 self.cnt += 1
-                self.values = event.values
+                self.small_q.append(event.values)
+                sq = np.array(self.small_q)
+                self.values = list(np.mean(sq, axis=0))
                 self.q.append(event.values)
                 t = time.time()
                 if t - self.last_time > 1:
@@ -88,26 +109,10 @@ if platform == 'android':
                     self.cnt = 0
 
 
-        @java_method('(Landroid/hardware/Sensor;I)V')
-        def onAccuracyChanged(self, sensor, accuracy):
-            # Maybe, do something in future?
-            pass
-
-    class AccelerometerSensorListener(SensorListener):
-        def __init__(self):
-            super().__init__()
-            self.name = 'acc'
-            self.SensorManager = cast(
-                'android.hardware.SensorManager',
-                activity.getSystemService(Context.SENSOR_SERVICE)
-            )
-            self.sensor = self.SensorManager.getDefaultSensor(
-                Sensor.TYPE_ACCELEROMETER
-            )
 
     class MagnetometerSensorListener(SensorListener):
         def __init__(self, acc):
-            super().__init__()
+            super().__init__(default_rate=DEFAULT_MAGNETOMETER_RATE)
             self.name = 'spat'
             self.acc = acc
             service = activity.getSystemService(Context.SENSOR_SERVICE)
@@ -143,8 +148,9 @@ if platform == 'android':
 
 
 class Dummy:
-    def __init__(self):
+    def __init__(self, _rate):
         self.rate = 0
+        self._rate = _rate
         pass
 
     def enable(self, q, lock):
@@ -161,7 +167,7 @@ class Dummy:
         cnt = 0
         last_time = time.time()
         while self.run:
-            time.sleep(1/DEFAULT_ACCELEROMETER_RATE)
+            time.sleep(1/self._rate)
             data = [random() - 2 , random(), random() + 2 ]
             with self.lock:
                 self.q.append(data)
@@ -187,8 +193,8 @@ class Accelerometer:
             self.acc = AccelerometerSensorListener()
             self.mag = MagnetometerSensorListener(self.acc)
         else:
-            self.acc = Dummy()
-            self.mag = Dummy()
+            self.acc = Dummy(DEFAULT_ACCELEROMETER_RATE)
+            self.mag = Dummy(DEFAULT_MAGNETOMETER_RATE)
 
         self.acc.enable(self.q, self.lock)
         self.mag.enable(self.mag_q, self.mag_lock)

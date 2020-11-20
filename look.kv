@@ -40,11 +40,22 @@
                 bold: True
                 on_press: root.on_press()
         BoxLayout:
+            orientation: "horizontal"
             size_hint: [1, .9]
             Graph:
-                id: graph
+                id: graph0
                 y_grid_label : True
                 y_grid: True
+            Graph:
+                id: graph1
+                y_grid_label : True
+                y_grid: True
+            Graph:
+                id: graph2
+                y_grid_label : True
+                y_grid: True
+
+
 
 Screen:
     ScreenManager:

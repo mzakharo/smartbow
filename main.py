@@ -99,6 +99,7 @@ class MainScreen(Screen):
     def get_value(self, dt):
         with accelerometer.lock:
             points  = np.array(accelerometer.q).T
+            rate = accelerometer.rate
         this_time = time.time()
         pmax = np.abs(points).max()
         if pmax > SHOT_THRESH and (this_time- self.shot_time) > 4:
@@ -109,26 +110,28 @@ class MainScreen(Screen):
             Clock.schedule_once(self.notify)
             point = Point("arrow").tag('id', self.worker.id).field('shot', self.shot).time(int(self.shot_time*10**9), WritePrecision.NS)
             self.worker.q.put(('point', point))
-            self.half_point = this_time + (points.shape[1] / accelerometer.rate * 0.5)
+            self.half_point = this_time + (points.shape[1] / rate * 0.5)
 
-        #delay upload unitl half_point in buffer is reached
-        force_update = False
+
+        
         if self.half_point is not None and this_time > self.half_point:
             force_update = True
             self.half_point = None
+        else:
+            force_update = False
 
         self.update_cnt += 1
         #slow down graph update to lower cpu usage
         if self.update_cnt == GRAPH_RATE or force_update: 
             self.update_cnt = 0
             if force_update:
-                self.update_cnt = -int(5 / POLL_RATE) #freeze graph after shot
+                self.update_cnt = -int(10 / POLL_RATE) #freeze graph after shot
             gr = self.ids.graph
-            gr.ymax = min(GRAPH_LIMIT, max(1, int(points.max() + 1)))
-            gr.ymin = max(-GRAPH_LIMIT, min(int(points.min()-1), gr.ymax-1))
+            gr.ymax = min(GRAPH_Y_LIMIT, max(1, int(points.max() + 1)))
+            gr.ymin = max(-GRAPH_Y_LIMIT, min(int(points.min()-1), gr.ymax-1))
             gr.xmax = points.shape[1]
             gr.y_ticks_major = max(1 , (gr.ymax - gr.ymin) / 5)
-            gr.xlabel = f'Accelerometer {int(accelerometer.rate)} /sec'
+            gr.xlabel = f'Accelerometer {int(rate)} /sec'
 
             self.px.points = enumerate(points[0])
             self.py.points = enumerate(points[1])
@@ -137,9 +140,10 @@ class MainScreen(Screen):
 class SecondScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.px = MeshLinePlot(color=[1, 0, 0, 1])
-        self.py = MeshLinePlot(color=[0, 1, 0, 1])
-        self.pz = MeshLinePlot(color=[0, 0, 1, 1])
+        self.plots = [  MeshLinePlot(color=[1, 0, 0, 1]),
+                        MeshLinePlot(color=[0, 1, 0, 1]),
+                        MeshLinePlot(color=[0, 0, 1, 1]),
+                        ]
         self.first_run = True
         self.shot_count = 0
         self.worker = Worker()
@@ -159,9 +163,8 @@ class SecondScreen(Screen):
         print('start')
         if self.first_run:
             self.first_run = False
-            self.ids.graph.add_plot(self.px)
-            self.ids.graph.add_plot(self.py)
-            self.ids.graph.add_plot(self.pz)
+            for i, plot in enumerate(self.plots):
+                getattr(self.ids, f'graph{i}').add_plot(plot)
 
         self.update_cnt = 0
         self.half_point = None
@@ -188,6 +191,7 @@ class SecondScreen(Screen):
     def get_value(self, dt):
         with accelerometer.lock:
             points  = np.array(accelerometer.mag_q).T
+            rate = accelerometer.mag_rate
             acc_points  = np.array(accelerometer.q).T
         this_time = time.time()
         pmax = np.abs(acc_points).max()
@@ -199,7 +203,7 @@ class SecondScreen(Screen):
             Clock.schedule_once(self.notify)
             point = Point("arrow").tag('id', self.worker.id).field('shot', self.shot).time(int(self.shot_time*10**9), WritePrecision.NS)
             self.worker.q.put(('point', point))
-            self.half_point = this_time + (points.shape[1] / accelerometer.rate * 0.5)
+            self.half_point = this_time + (points.shape[1] / rate * 0.5)
 
         #delay upload unitl half_point in buffer is reached
         force_update = False
@@ -212,18 +216,18 @@ class SecondScreen(Screen):
         if self.update_cnt == GRAPH_RATE or force_update: 
             self.update_cnt = 0
             if force_update:
-                self.update_cnt = -int(5 / POLL_RATE) #freeze graph after shot
-            gr = self.ids.graph
-            gr.ymax = min(GRAPH_LIMIT, max(1, int(points.max() + 1)))
-            gr.ymin = max(-GRAPH_LIMIT, min(int(points.min()-1), gr.ymax-1))
-            gr.xmax = points.shape[1]
-            gr.y_ticks_major = max(1 , (gr.ymax - gr.ymin) / 5)
-            gr.xlabel = f'Orientation {int(accelerometer.mag_rate)} /sec'
+                self.update_cnt = -int(10 / POLL_RATE) #freeze graph after shot
 
-            self.px.points = enumerate(points[0])
-            self.py.points = enumerate(points[1])
-            self.pz.points = enumerate(points[2])
-
+            labels = ['x', 'y', 'z']
+            for i, plot in enumerate(self.plots):
+                gr = getattr(self.ids, f'graph{i}')
+                values = points[i] * 100
+                gr.ymax = int(min(GRAPH_Y_LIMIT, values.max()))
+                gr.ymin = int(max(-GRAPH_Y_LIMIT, min(values.min(), gr.ymax-1)))
+                gr.xmax = len(values)
+                gr.y_ticks_major = max(1 , (gr.ymax - gr.ymin) / 5)
+                gr.xlabel = f'{labels[i]} : {int(rate)} /sec'
+                plot.points = enumerate(values)
 
 class SmartBow(App): 
     def build(self): 
@@ -234,7 +238,7 @@ class SmartBow(App):
         sm.add_widget(self.main)
         self.screen2 = SecondScreen(name='secondscreen')
         sm.add_widget(self.screen2)
-        #sm.current = 'main'
+        sm.current = 'secondscreen'
         return self.screen
 
     def on_resume(self):
