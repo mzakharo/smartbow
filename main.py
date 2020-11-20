@@ -35,6 +35,20 @@ class Worker:
         cmd, val = self.q.get()
         if cmd == 'point':
             self.write_api.write(BUCKET, ORG, val)
+        elif cmd in ['orientation', 'acceleration']:
+            start_time, rate, points = val
+            num_points = points.shape[1]
+            send_buffer = []
+            for i in range(num_points):
+                values = points[:, i]
+                for idx, value in enumerate(values):
+                    point = Point(cmd).tag('id', self.id).tag('idx', idx).field('value', value)
+                    point.time(int((start_time + (i / rate ))*10**9), WritePrecision.NS)
+                    send_buffer.append(point)
+            print('send_buffer')
+            self.write_api.write(BUCKET, ORG, send_buffer)
+
+
         else:
             raise Exception("unknown cmd", cmd)
 
@@ -45,61 +59,13 @@ class Worker:
             except Exception as e:
                 print(e)
 
+class CommonScreen(Screen):
+    shot_count = 0
+    update_cnt = 0
+    freeze_point = None
+    shot_time = 0
 
-class MainScreen(Screen):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.px = MeshLinePlot(color=[1, 0, 0, 1])
-        self.py = MeshLinePlot(color=[0, 1, 0, 1])
-        self.pz = MeshLinePlot(color=[0, 0, 1, 1])
-        self.first_run = True
-        self.shot_count = 0
-        self.worker = Worker()
-        self.enabled = False
-
-    def on_enter(self):
-        print('on enter')
-        self.start()
-
-    def on_exit(self):
-        print('on exit')
-        self.stop()
-
-    def start(self):
-        print('start')
-
-        if self.first_run:
-            self.first_run = False
-            self.ids.graph.add_plot(self.px)
-            self.ids.graph.add_plot(self.py)
-            self.ids.graph.add_plot(self.pz)
-
-        self.update_cnt = 0
-        self.half_point = None
-        self.shot_time = 0
-        Clock.schedule_interval(self.get_value, POLL_RATE)
-        self.enabled = True
-
-    def stop(self):
-        print('stop')
-        Clock.unschedule(self.get_value)
-        self.enabled = False
-
-    def on_press(self):
-        if not self.enabled:
-            self.start()
-            self.ids.toggle.text = 'STOP'
-        else:
-            self.stop()
-            self.ids.toggle.text = 'START'
-
-    def notify(self, dt):
-        notification.notify(title='>-------->', message=self.message)           
-
-    def get_value(self, dt):
-        with accelerometer.lock:
-            points  = np.array(accelerometer.q).T
-            rate = accelerometer.rate
+    def detect_shot(self, points, rate):
         this_time = time.time()
         pmax = np.abs(points).max()
         if pmax > SHOT_THRESH and (this_time- self.shot_time) > 4:
@@ -110,72 +76,13 @@ class MainScreen(Screen):
             Clock.schedule_once(self.notify)
             point = Point("arrow").tag('id', self.worker.id).field('shot', self.shot).time(int(self.shot_time*10**9), WritePrecision.NS)
             self.worker.q.put(('point', point))
-            self.half_point = this_time + (points.shape[1] / rate * 0.5)
+            self.freeze_point = this_time + (points.shape[1] / rate * 0.7)
 
-
-        
-        if self.half_point is not None and this_time > self.half_point:
+        if self.freeze_point is not None and this_time > self.freeze_point:
             force_update = True
-            self.half_point = None
+            self.freeze_point = None
         else:
             force_update = False
-
-        self.update_cnt += 1
-        #slow down graph update to lower cpu usage
-        if self.update_cnt == GRAPH_RATE or force_update: 
-            self.update_cnt = 0
-            if force_update:
-                self.update_cnt = -int(10 / POLL_RATE) #freeze graph after shot
-            gr = self.ids.graph
-            gr.ymax = min(GRAPH_Y_LIMIT, max(1, int(points.max() + 1)))
-            gr.ymin = max(-GRAPH_Y_LIMIT, min(int(points.min()-1), gr.ymax-1))
-            gr.xmax = points.shape[1]
-            gr.y_ticks_major = max(1 , (gr.ymax - gr.ymin) / 5)
-            gr.xlabel = f'Accelerometer {int(rate)} /sec'
-
-            self.px.points = enumerate(points[0])
-            self.py.points = enumerate(points[1])
-            self.pz.points = enumerate(points[2])
-
-class SecondScreen(Screen):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.plots = [  MeshLinePlot(color=[1, 0, 0, 1]),
-                        MeshLinePlot(color=[0, 1, 0, 1]),
-                        MeshLinePlot(color=[0, 0, 1, 1]),
-                        ]
-        self.first_run = True
-        self.shot_count = 0
-        self.worker = Worker()
-        #self.message = 'started'
-        #Clock.schedule_once(self.notify)
-        self.enabled = False
-
-    def on_enter(self):
-        print('on enter')
-        self.start()
-
-    def on_exit(self):
-        print('on exit')
-        self.stop()
-
-    def start(self):
-        print('start')
-        if self.first_run:
-            self.first_run = False
-            for i, plot in enumerate(self.plots):
-                getattr(self.ids, f'graph{i}').add_plot(plot)
-
-        self.update_cnt = 0
-        self.half_point = None
-        self.shot_time = 0
-        Clock.schedule_interval(self.get_value, POLL_RATE)
-        self.enabled = True
-
-    def stop(self):
-        print('stop')
-        Clock.unschedule(self.get_value)
-        self.enabled = False
 
     def on_press(self):
         if not self.enabled:
@@ -185,31 +92,95 @@ class SecondScreen(Screen):
             self.stop()
             self.ids.toggle.text = 'START'
 
+    def on_enter(self):
+        print(self.name, 'on enter')
+        self.start()
+
+    def on_exit(self):
+        print(self.name, 'on exit')
+        self.stop()
+
+    def stop(self):
+        print(self.name, 'stop')
+        Clock.unschedule(self.get_value)
+        self.enabled = False
+
+
+
     def notify(self, dt):
         notification.notify(title='>-------->', message=self.message)           
+
+class MainScreen(CommonScreen):
+    def __init__(self, **kwargs):
+        self.worker = kwargs.pop('worker')
+        super().__init__(**kwargs)
+        self.px = MeshLinePlot(color=[1, 0, 0, 1])
+        self.py = MeshLinePlot(color=[0, 1, 0, 1])
+        self.pz = MeshLinePlot(color=[0, 0, 1, 1])
+        self.first_run = True
+        self.enabled = False
+
+    def start(self):
+        print(self.name, 'start')
+        if self.first_run:
+            self.first_run = False
+            self.ids.graph.add_plot(self.px)
+            self.ids.graph.add_plot(self.py)
+            self.ids.graph.add_plot(self.pz)
+
+        Clock.schedule_interval(self.get_value, POLL_RATE)
+        self.enabled = True
+
+    def get_value(self, dt):
+        with accelerometer.lock:
+            points  = np.array(accelerometer.q).T
+            rate = accelerometer.rate
+        force_update = self.detect_shot(points, rate)
+        self.update_cnt += 1
+        if self.update_cnt == GRAPH_RATE or force_update: 
+            self.update_cnt = 0
+            if force_update:
+                self.update_cnt = -int(10 / POLL_RATE) #freeze graph after shot
+                self.worker.q.put(('acceleration', (self.shot_time, rate, points)))
+            gr = self.ids.graph
+            gr.ymax = min(GRAPH_Y_LIMIT, max(1, int(points.max() + 1)))
+            gr.ymin = max(-GRAPH_Y_LIMIT, min(int(points.min()-1), gr.ymax-1))
+            gr.xmax = points.shape[1]
+            gr.y_ticks_major = max(1 , (gr.ymax - gr.ymin) / 5)
+            gr.xlabel = f'Accelerometer {int(rate)} /sec'
+            self.px.points = enumerate(points[0])
+            self.py.points = enumerate(points[1])
+            self.pz.points = enumerate(points[2])
+
+
+class OrientationScreen(CommonScreen):
+
+    def __init__(self, **kwargs):
+        self.worker = kwargs.pop('worker')
+        super().__init__(**kwargs)
+        self.plots = [  MeshLinePlot(color=[1, 0, 0, 1]),
+                        MeshLinePlot(color=[0, 1, 0, 1]),
+                        MeshLinePlot(color=[0, 0, 1, 1]),
+                        ]
+        self.first_run = True
+        self.enabled = False
+
+    def start(self):
+        print(self.name, 'start')
+        if self.first_run:
+            self.first_run = False
+            for i, plot in enumerate(self.plots):
+                getattr(self.ids, f'graph{i}').add_plot(plot)
+        Clock.schedule_interval(self.get_value, POLL_RATE)
+        self.enabled = True
 
     def get_value(self, dt):
         with accelerometer.lock:
             points  = np.array(accelerometer.mag_q).T
             rate = accelerometer.mag_rate
             acc_points  = np.array(accelerometer.q).T
-        this_time = time.time()
-        pmax = np.abs(acc_points).max()
-        if pmax > SHOT_THRESH and (this_time- self.shot_time) > 4:
-            self.shot_count += 1
-            self.shot = pmax
-            self.shot_time = this_time
-            self.message=f'{datetime.datetime.now()}: shot # {self.shot_count}'
-            Clock.schedule_once(self.notify)
-            point = Point("arrow").tag('id', self.worker.id).field('shot', self.shot).time(int(self.shot_time*10**9), WritePrecision.NS)
-            self.worker.q.put(('point', point))
-            self.half_point = this_time + (points.shape[1] / rate * 0.5)
 
-        #delay upload unitl half_point in buffer is reached
-        force_update = False
-        if self.half_point is not None and this_time > self.half_point:
-            force_update = True
-            self.half_point = None
+        force_update = self.detect_shot(acc_points, rate)
 
         self.update_cnt += 1
         #slow down graph update to lower cpu usage
@@ -217,7 +188,7 @@ class SecondScreen(Screen):
             self.update_cnt = 0
             if force_update:
                 self.update_cnt = -int(10 / POLL_RATE) #freeze graph after shot
-
+                self.worker.q.put(('orientation', (self.shot_time, rate, points)))
             labels = ['x', 'y', 'z']
             for i, plot in enumerate(self.plots):
                 gr = getattr(self.ids, f'graph{i}')
@@ -234,11 +205,12 @@ class SmartBow(App):
         Builder.load_file("look.kv")
         self.screen = Builder.load_file('look.kv')
         sm = self.screen.ids.sm
-        self.main = MainScreen(name='main')
+        worker = Worker()
+        self.main = MainScreen(name='main', worker=worker)
         sm.add_widget(self.main)
-        self.screen2 = SecondScreen(name='secondscreen')
+        self.screen2 = OrientationScreen(name='orientation_screen', worker=worker)
         sm.add_widget(self.screen2)
-        sm.current = 'secondscreen'
+        sm.current = 'orientation_screen'
         return self.screen
 
     def on_resume(self):

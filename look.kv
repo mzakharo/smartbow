@@ -5,11 +5,11 @@
             size_hint: [1, .1]
             orientation: "horizontal"
             Button:
-                text: "To screen 2"
+                text: "To Orientation"
                 bold: True
                 on_press:
                     root.manager.transition.direction = 'left'
-                    root.manager.current = 'secondscreen'
+                    root.manager.current = 'orientation_screen'
             Button:
                 id: toggle
                 text: "STOP"
@@ -22,14 +22,14 @@
                 y_grid_label : True
                 y_grid: True
 
-<SecondScreen>:
+<OrientationScreen>:
     BoxLayout:
         orientation: "vertical"
         BoxLayout:
             size_hint: [1, .1]
             orientation: "horizontal"
             Button:
-                text: "To main"
+                text: "To Accelerometer"
                 bold: True
                 on_press:
                     root.manager.transition.direction = 'right'
