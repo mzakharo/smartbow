@@ -181,7 +181,7 @@ class OrientationScreen(CommonScreen):
     def __init__(self, **kwargs):
         self.worker = kwargs.pop('worker')
         super().__init__(**kwargs)
-        lw = 3
+        lw = 2
         self.plots = [  LinePlot(color=[1, 1, 0, 1], line_width=lw),
                         LinePlot(color=[0, 1, 0, 1], line_width=lw),
                         LinePlot(color=[1, 1, 0, 1], line_width=lw),
@@ -203,11 +203,12 @@ class OrientationScreen(CommonScreen):
         with accelerometer.lock:
             points  = np.array(accelerometer.mag_q).T * 180 / np.pi
             rate = accelerometer.mag_rate
+            acc_rate = accelerometer.rate
             acc_points  = np.array(accelerometer.q).T
 
         force_update = self.detect_shot(acc_points, rate)
         self.update_cnt += 1
-        self.ids.label.text =  f'Sample Rate : {rate:.1f} /sec'
+        self.ids.label.text =  f'Samples/sec: Mag {rate:.1f} | Acc {acc_rate:.1f}'
         #slow down graph update to lower cpu usage
         if self.update_cnt == GRAPH_RATE or force_update: 
             self.update_cnt = 0
