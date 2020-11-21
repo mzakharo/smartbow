@@ -6,6 +6,7 @@ from kivy_garden.graph import MeshLinePlot, LinePlot
 from kivy.clock import Clock
 from kivy.uix.screenmanager import ScreenManager, Screen
 
+
 import time
 import datetime
 import threading
@@ -20,6 +21,15 @@ from queue import Queue
 
 from urllib3 import Retry
 from config import *
+import os, json
+
+
+from plyer import storagepath
+from plyer.utils import platform
+if platform == 'android':
+    from android.permissions import request_permissions, Permission
+    request_permissions([Permission.READ_EXTERNAL_STORAGE])
+
 
 def moving_average(a, n=6):
     ret = np.cumsum(a, dtype=a.dtype)
@@ -27,10 +37,19 @@ def moving_average(a, n=6):
     return ret[n - 1:] / n
 
 class Worker:
-    def __init__(self):
+    def __init__(self, config):
         retries = Retry(connect=5, read=2, redirect=5)
-        self.client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, timeout=10, retries=retries)
-        self.write_api = self.client.write_api(write_options=SYNCHRONOUS) #ASYNC does not work due to sem_ impoementation missing
+        print(config)
+        valid = 'influx_org' in config and 'influx_bucket' in config and 'influx_token' in config and 'influx_url' in config
+        if valid:
+            print('influx:', config['influx_url'])
+            self.client = InfluxDBClient(url=config['influx_url'], token=config['influx_token'], timeout=10, retries=retries)
+            self.bucket = config['influx_bucket']
+            self.org = config['influx_org']
+            self.write_api = self.client.write_api(write_options=SYNCHRONOUS) #ASYNC does not work due to sem_ impoementation missing
+        else:
+            print('influx configuration not found')
+            self.write_api = None
         self.id = uniqueid.id
         self.q = Queue()
         do_th = threading.Thread(target=self.do, daemon=True)
@@ -39,7 +58,8 @@ class Worker:
     def process(self):
         cmd, val = self.q.get()
         if cmd == 'point':
-            self.write_api.write(BUCKET, ORG, val)
+            if self.write_api is not None:
+                self.write_api.write(self.bucket, self.org, val)
         elif cmd == 'shot':
             time, shot = val
             print(cmd, time, shot)
@@ -55,7 +75,8 @@ class Worker:
                     point.time(int((start_time + (i / rate ))*10**9), WritePrecision.NS)
                     send_buffer.append(point)
             print('send_buffer', cmd, len(send_buffer))
-            self.write_api.write(BUCKET, ORG, send_buffer)
+            if self.write_api is not None:
+                self.write_api.write(self.bucket, self.org, send_buffer)
 
 
         else:
@@ -215,7 +236,13 @@ class SmartBow(App):
         Builder.load_file("look.kv")
         self.screen = Builder.load_file('look.kv')
         sm = self.screen.ids.sm
-        worker = Worker()
+        path = storagepath.get_external_storage_dir() if platform == 'android' else '.'
+        config_file = os.path.join(path, 'smartbow_config.json')
+        config = {}
+        if os.path.isfile(config_file):
+            with open(config_file, 'r') as f:
+                config = json.loads(f.read())
+        worker = Worker(config=config)
         screen2 = OrientationScreen(name='orientation_screen', worker=worker)
         sm.add_widget(screen2)
         main = MainScreen(name='main', worker=worker)
