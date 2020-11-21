@@ -10,12 +10,14 @@
 If you want to upload arrow count/orientation sensor info into InfluxDB database, then either obtain free InfluxDB instance from https://cloud2.influxdata.com/signup, edit and add a smartbow_config.json to /sdcard
 
 
-# Setup android adb
+# Setup android adb on Linux
 ```
 lsusb  to get vendor/product
 cp 51-android.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules
 ```
+
+## APK Build instructions
 
 # Add to .bashrc
 export PATH=$HOME/.local/bin/:$HOME/.buildozer/android/platform/android-sdk/platform-tools/:$PATH
@@ -41,6 +43,9 @@ sudo apt install ccache
 
 ## build the .apk
  ```make```
+ 
+## install the .apk
+```make install```
 
 ## log
 ```./logcat.sh```
