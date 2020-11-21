@@ -20,7 +20,7 @@ sudo udevadm control --reload-rules
 ## APK Build instructions
 
 # Add to .bashrc
-export PATH=$HOME/.local/bin/:$HOME/.buildozer/android/platform/android-sdk/platform-tools/:$PATH
+```export PATH=$HOME/.local/bin/:$HOME/.buildozer/android/platform/android-sdk/platform-tools/:$PATH```
 
 # Prep for buildozer
 ```
