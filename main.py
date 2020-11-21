@@ -116,7 +116,7 @@ class CommonScreen(Screen):
         this_time = time.time()
         pmax = np.abs(points).max()
         if pmax > SHOT_THRESH and (this_time- self.shot_time) > 4:
-            self.shot_count += 1
+            CommonScreen.shot_count += 1
             self.shot = pmax
             self.shot_time = this_time
             self.message=f'{datetime.datetime.now()}: value - {self.shot:.1f} shot # {self.shot_count}'
