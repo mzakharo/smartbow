@@ -5,6 +5,9 @@
 * Tested with Galaxy S10
 * [Bow phone Mount](https://www.amazon.ca/Smartphone-Camera-Phone-IPhone-Samsung/dp/B00BVF6V5Q)
 
+![Screenshot](/extra/screenshot1.png?raw=true "Main page")
+
+
 ##  InfluxDB 2.0 setup (Optional)
 
 If you want to upload arrow count/orientation sensor info into InfluxDB database, then either obtain free InfluxDB instance from https://cloud2.influxdata.com/signup, edit and add a smartbow_config.json to /sdcard
