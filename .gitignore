@@ -1,4 +1,5 @@
 *.swp
 .buildozer
 __pycache__
+/bin
 *.swo
