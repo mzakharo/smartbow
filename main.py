@@ -23,13 +23,8 @@ from urllib3 import Retry
 from config import *
 import os, json
 
-
 from plyer import storagepath
 from plyer.utils import platform
-if platform == 'android':
-    from android.permissions import request_permissions, Permission
-    request_permissions([Permission.READ_EXTERNAL_STORAGE])
-
 
 def moving_average(a, n=6):
     ret = np.cumsum(a, dtype=a.dtype)
@@ -39,7 +34,6 @@ def moving_average(a, n=6):
 class Worker:
     def __init__(self, config):
         retries = Retry(connect=5, read=2, redirect=5)
-        print(config)
         valid = 'influx_org' in config and 'influx_bucket' in config and 'influx_token' in config and 'influx_url' in config
         if valid:
             print('influx:', config['influx_url'])
@@ -233,23 +227,25 @@ class OrientationScreen(CommonScreen):
 
 class SmartBow(App): 
     def build(self): 
-        Builder.load_file("look.kv")
         self.screen = Builder.load_file('look.kv')
         sm = self.screen.ids.sm
+
+        #get config
+        config = {}
         path = storagepath.get_external_storage_dir() if platform == 'android' else '.'
         config_file = os.path.join(path, 'smartbow_config.json')
-        config = {}
         try:
             if os.path.isfile(config_file):
                 with open(config_file, 'r') as f:
                     config = json.loads(f.read())
         except PermissionError:
-            print('WARNING: no permissions given to access', config_file)
+            print('WARNING: no permissions to access', config_file)
+
         worker = Worker(config=config)
-        screen2 = OrientationScreen(name='orientation_screen', worker=worker)
-        sm.add_widget(screen2)
-        main = MainScreen(name='main', worker=worker)
-        sm.add_widget(main)
+        self.screen2 = OrientationScreen(name='orientation_screen', worker=worker)
+        sm.add_widget(self.screen2)
+        self.main = MainScreen(name='main', worker=worker)
+        sm.add_widget(self.main)
         return self.screen
 
     def on_resume(self):
@@ -272,4 +268,7 @@ class SmartBow(App):
         return True
 
 if __name__ == "__main__":
+    if platform == 'android':
+        from android.permissions import request_permissions, Permission
+        request_permissions([Permission.READ_EXTERNAL_STORAGE])
     SmartBow().run()     
