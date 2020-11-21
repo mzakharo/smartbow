@@ -240,6 +240,9 @@ class SmartBow(App):
                     config = json.loads(f.read())
         except PermissionError:
             print('WARNING: no permissions to access', config_file)
+            if platform == 'android':
+                from android.permissions import request_permissions, Permission
+                request_permissions([Permission.READ_EXTERNAL_STORAGE])
 
         worker = Worker(config=config)
         self.screen2 = OrientationScreen(name='orientation_screen', worker=worker)
@@ -268,7 +271,4 @@ class SmartBow(App):
         return True
 
 if __name__ == "__main__":
-    if platform == 'android':
-        from android.permissions import request_permissions, Permission
-        request_permissions([Permission.READ_EXTERNAL_STORAGE])
     SmartBow().run()     
