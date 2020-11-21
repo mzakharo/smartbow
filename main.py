@@ -136,7 +136,7 @@ class MainScreen(CommonScreen):
     def __init__(self, **kwargs):
         self.worker = kwargs.pop('worker')
         super().__init__(**kwargs)
-        self.px = MeshLinePlot(color=[1, 1, 0, 1])
+        self.px = MeshLinePlot(color=[1, 0, 0, 1])
         self.py = MeshLinePlot(color=[0, 1, 0, 1])
         self.pz = MeshLinePlot(color=[1, 1, 0, 1])
         self.first_run = True
@@ -240,7 +240,7 @@ class SmartBow(App):
                     config = json.loads(f.read())
         except PermissionError:
             print('WARNING: no permissions to access', config_file)
-            if platform == 'android':
+            if platform == 'android': #KIVY bug: checking permissions on every run makes minimize app not work
                 from android.permissions import request_permissions, Permission
                 request_permissions([Permission.READ_EXTERNAL_STORAGE])
 
