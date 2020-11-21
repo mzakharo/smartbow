@@ -21,6 +21,11 @@ from queue import Queue
 from urllib3 import Retry
 from config import *
 
+def moving_average(a, n=6):
+    ret = np.cumsum(a, dtype=a.dtype)
+    ret[n:] = ret[n:] - ret[:-n]
+    return ret[n - 1:] / n
+
 class Worker:
     def __init__(self):
         retries = Retry(connect=5, read=2, redirect=5)
@@ -35,6 +40,10 @@ class Worker:
         cmd, val = self.q.get()
         if cmd == 'point':
             self.write_api.write(BUCKET, ORG, val)
+        elif cmd == 'shot':
+            time, shot = val
+            print(cmd, time, shot)
+            point = Point("arrow").tag('id', self.id).field('shot', shot).time(int(time*10**9), WritePrecision.NS)
         elif cmd in ['orientation', 'acceleration']:
             start_time, rate, points = val
             num_points = points.shape[1]
@@ -45,7 +54,7 @@ class Worker:
                     point = Point(cmd).tag('id', self.id).tag('idx', idx).field('value', value)
                     point.time(int((start_time + (i / rate ))*10**9), WritePrecision.NS)
                     send_buffer.append(point)
-            print('send_buffer')
+            print('send_buffer', cmd, len(send_buffer))
             self.write_api.write(BUCKET, ORG, send_buffer)
 
 
@@ -61,28 +70,8 @@ class Worker:
 
 class CommonScreen(Screen):
     shot_count = 0
-    update_cnt = 0
     freeze_point = None
     shot_time = 0
-
-    def detect_shot(self, points, rate):
-        this_time = time.time()
-        pmax = np.abs(points).max()
-        if pmax > SHOT_THRESH and (this_time- self.shot_time) > 4:
-            self.shot_count += 1
-            self.shot = pmax
-            self.shot_time = this_time
-            self.message=f'{datetime.datetime.now()}: shot # {self.shot_count}'
-            Clock.schedule_once(self.notify)
-            point = Point("arrow").tag('id', self.worker.id).field('shot', self.shot).time(int(self.shot_time*10**9), WritePrecision.NS)
-            self.worker.q.put(('point', point))
-            self.freeze_point = this_time + (points.shape[1] / rate * 0.7)
-
-        if self.freeze_point is not None and this_time > self.freeze_point:
-            force_update = True
-            self.freeze_point = None
-        else:
-            force_update = False
 
     def on_press(self):
         if not self.enabled:
@@ -96,8 +85,8 @@ class CommonScreen(Screen):
         print(self.name, 'on enter')
         self.start()
 
-    def on_exit(self):
-        print(self.name, 'on exit')
+    def on_leave(self):
+        print(self.name, 'on leave')
         self.stop()
 
     def stop(self):
@@ -105,10 +94,28 @@ class CommonScreen(Screen):
         Clock.unschedule(self.get_value)
         self.enabled = False
 
-
-
     def notify(self, dt):
         notification.notify(title='>-------->', message=self.message)           
+
+    def detect_shot(self, points, rate):
+        this_time = time.time()
+        pmax = np.abs(points).max()
+        if pmax > SHOT_THRESH and (this_time- self.shot_time) > 4:
+            self.shot_count += 1
+            self.shot = pmax
+            self.shot_time = this_time
+            self.message=f'{datetime.datetime.now()}: value - {self.shot:.1f} shot # {self.shot_count}'
+            Clock.schedule_once(self.notify)
+            self.worker.q.put(('shot', (self.shot_time, self.shot)))
+            self.freeze_point = this_time + (points.shape[1] / rate * 0.3)
+
+        if self.freeze_point is not None and this_time > self.freeze_point:
+            force_update = True
+            self.freeze_point = None
+        else:
+            force_update = False
+        return force_update
+
 
 class MainScreen(CommonScreen):
     def __init__(self, **kwargs):
@@ -116,7 +123,7 @@ class MainScreen(CommonScreen):
         super().__init__(**kwargs)
         self.px = MeshLinePlot(color=[1, 0, 0, 1])
         self.py = MeshLinePlot(color=[0, 1, 0, 1])
-        self.pz = MeshLinePlot(color=[0, 0, 1, 1])
+        self.pz = MeshLinePlot(color=[1, 1, 0, 1])
         self.first_run = True
         self.enabled = False
 
@@ -130,6 +137,7 @@ class MainScreen(CommonScreen):
 
         Clock.schedule_interval(self.get_value, POLL_RATE)
         self.enabled = True
+        self.update_cnt = 0
 
     def get_value(self, dt):
         with accelerometer.lock:
@@ -160,7 +168,7 @@ class OrientationScreen(CommonScreen):
         super().__init__(**kwargs)
         self.plots = [  MeshLinePlot(color=[1, 0, 0, 1]),
                         MeshLinePlot(color=[0, 1, 0, 1]),
-                        MeshLinePlot(color=[0, 0, 1, 1]),
+                        MeshLinePlot(color=[1, 1, 0, 1]),
                         ]
         self.first_run = True
         self.enabled = False
@@ -173,31 +181,30 @@ class OrientationScreen(CommonScreen):
                 getattr(self.ids, f'graph{i}').add_plot(plot)
         Clock.schedule_interval(self.get_value, POLL_RATE)
         self.enabled = True
+        self.update_cnt = 0
 
     def get_value(self, dt):
         with accelerometer.lock:
-            points  = np.array(accelerometer.mag_q).T
+            points  = np.array(accelerometer.mag_q).T * 180 / np.pi
             rate = accelerometer.mag_rate
             acc_points  = np.array(accelerometer.q).T
 
         force_update = self.detect_shot(acc_points, rate)
-
         self.update_cnt += 1
+        self.ids.label.text =  f'Sample Rate : {rate:.1f} /sec'
         #slow down graph update to lower cpu usage
         if self.update_cnt == GRAPH_RATE or force_update: 
             self.update_cnt = 0
             if force_update:
                 self.update_cnt = -int(10 / POLL_RATE) #freeze graph after shot
                 self.worker.q.put(('orientation', (self.shot_time, rate, points)))
-            labels = ['x', 'y', 'z']
+                #self.worker.q.put(('acceleration', (self.shot_time, rate, acc_points)))
             for i, plot in enumerate(self.plots):
                 gr = getattr(self.ids, f'graph{i}')
-                values = points[i] * 100
-                gr.ymax = int(min(GRAPH_Y_LIMIT, values.max()))
-                gr.ymin = int(max(-GRAPH_Y_LIMIT, min(values.min(), gr.ymax-1)))
+                values = points[i]
+                if i == 0:
+                    values = moving_average(values, n=13)
                 gr.xmax = len(values)
-                gr.y_ticks_major = max(1 , (gr.ymax - gr.ymin) / 5)
-                gr.xlabel = f'{labels[i]} : {int(rate)} /sec'
                 plot.points = enumerate(values)
 
 class SmartBow(App): 
@@ -206,11 +213,10 @@ class SmartBow(App):
         self.screen = Builder.load_file('look.kv')
         sm = self.screen.ids.sm
         worker = Worker()
-        self.main = MainScreen(name='main', worker=worker)
-        sm.add_widget(self.main)
-        self.screen2 = OrientationScreen(name='orientation_screen', worker=worker)
-        sm.add_widget(self.screen2)
-        sm.current = 'orientation_screen'
+        screen2 = OrientationScreen(name='orientation_screen', worker=worker)
+        sm.add_widget(screen2)
+        main = MainScreen(name='main', worker=worker)
+        sm.add_widget(main)
         return self.screen
 
     def on_resume(self):

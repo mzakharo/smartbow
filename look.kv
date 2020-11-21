@@ -2,7 +2,7 @@
     BoxLayout:
         orientation: "vertical"
         BoxLayout:
-            size_hint: [1, .1]
+            size_hint: [1, .05]
             orientation: "horizontal"
             Button:
                 text: "To Orientation"
@@ -16,7 +16,7 @@
                 bold: True
                 on_press: root.on_press()
         BoxLayout:
-            size_hint: [1, .9]
+            size_hint: [1, .95]
             Graph:
                 id: graph
                 y_grid_label : True
@@ -26,7 +26,7 @@
     BoxLayout:
         orientation: "vertical"
         BoxLayout:
-            size_hint: [1, .1]
+            size_hint: [1, .05]
             orientation: "horizontal"
             Button:
                 text: "To Accelerometer"
@@ -34,6 +34,8 @@
                 on_press:
                     root.manager.transition.direction = 'right'
                     root.manager.current = 'main'
+            Label:
+                id: label
             Button:
                 id: toggle
                 text: "STOP"
@@ -41,21 +43,43 @@
                 on_press: root.on_press()
         BoxLayout:
             orientation: "horizontal"
-            size_hint: [1, .9]
+            spacing: 20
+            size_hint: [1, .95]
             Graph:
+#values[0]: Azimuth, angle of rotation about the -z axis. This value represents the angle between the device's y axis and the magnetic north pole. When facing north, this angle is 0, when facing south, this angle is π. Likewise, when facing east, this angle is π/2, and when facing west, this angle is -π/2. The range of values is -π to π.
                 id: graph0
                 y_grid_label : True
                 y_grid: True
+                xlabel : 'Azimuth'
+                xmax : 300
+                ymax: 180
+                ymin: -180
+                y_ticks_minor : 15
+                y_ticks_major : 30
+
+#values[1]: Pitch, angle of rotation about the x axis. This value represents the angle between a plane parallel to the device's screen and a plane parallel to the ground. Assuming that the bottom edge of the device faces the user and that the screen is face-up, tilting the top edge of the device toward the ground creates a positive pitch angle. The range of values is -π to π.
             Graph:
                 id: graph1
                 y_grid_label : True
                 y_grid: True
+                xlabel : 'Pitch'
+                xmax : 300
+                ymax: 45
+                ymin: -45
+                y_ticks_minor : 5
+                y_ticks_major : 10
+
+#values[2]: Roll, angle of rotation about the y axis. This value represents the angle between a plane perpendicular to the device's screen and a plane perpendicular to the ground. Assuming that the bottom edge of the device faces the user and that the screen is face-up, tilting the left edge of the device toward the ground creates a positive roll angle. The range of values is -π/2 to π/2.
             Graph:
                 id: graph2
                 y_grid_label : True
                 y_grid: True
-
-
+                xmax : 300
+                ymax: 0
+                ymin: -180
+                xlabel : 'Roll'
+                y_ticks_minor : 7
+                y_ticks_major : 15
 
 Screen:
     ScreenManager:

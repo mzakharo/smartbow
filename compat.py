@@ -83,7 +83,7 @@ if platform == 'android':
         def __init__(self):
             super().__init__(default_rate=DEFAULT_ACCELEROMETER_RATE)
             self.name = 'acc'
-            self.small_q = deque(maxlen=10)
+            self.small_q = deque(maxlen=30)
             self.SensorManager = cast(
                 'android.hardware.SensorManager',
                 activity.getSystemService(Context.SENSOR_SERVICE)
@@ -97,13 +97,10 @@ if platform == 'android':
             with self.lock:
                 self.cnt += 1
                 self.small_q.append(event.values)
-                sq = np.array(self.small_q)
-                self.values = list(np.mean(sq, axis=0))
                 self.q.append(event.values)
                 t = time.time()
                 if t - self.last_time > 1:
                     self.rate_q.append(self.cnt)
-                    #print(f'{self.name}: {self.rate}')
                     self.rate = mean(self.rate_q)
                     self.last_time = t
                     self.cnt = 0
@@ -131,27 +128,32 @@ if platform == 'android':
                 inclination = [0] * 9
                 gravity = []
                 geomagnetic = []
-                gravity = self.acc.values
+
+                aq = self.acc.small_q
+                n = len(aq)
+                if n == 0:
+                    return
+                acc_values = np.array([aq.popleft() for _ in range(n)])
+                gravity = list(np.median(acc_values, axis=0))
+                #gravity = self.acc.values
                 geomagnetic = event.values
                 ff_state = self.SensorManager.getRotationMatrix(rotation, inclination, gravity, geomagnetic )
                 if ff_state:
                     values = [0, 0, 0]
                     values = self.SensorManager.getOrientation(rotation, values)
-                    #print(values)
                     self.q.append(values)
                     if t - self.last_time > 1:
                         self.rate_q.append(self.cnt)
-                        #print(f'{self.name}: {self.rate}')
                         self.rate = mean(self.rate_q)
                         self.last_time = t
                         self.cnt = 0
 
 
 class Dummy:
-    def __init__(self, _rate):
+    def __init__(self, _rate, type='acc'):
         self.rate = 0
         self._rate = _rate
-        pass
+        self.type = type
 
     def enable(self, q, lock):
         self.lock = lock
@@ -168,7 +170,13 @@ class Dummy:
         last_time = time.time()
         while self.run:
             time.sleep(1/self._rate)
-            data = [random() - 2 , random(), random() + 2 ]
+            if self.type == 'mag':
+                azimuth = np.random.uniform(-np.pi, np.pi)
+                pitch = np.random.uniform(-np.pi/4, np.pi/4)
+                roll = np.random.uniform(-np.pi, 0)
+                data = np.array([azimuth, pitch, roll])
+            else:
+                data = np.array([random() - 2 , random(), random() + 2 ])
             with self.lock:
                 self.q.append(data)
                 cnt +=1
@@ -194,7 +202,7 @@ class Accelerometer:
             self.mag = MagnetometerSensorListener(self.acc)
         else:
             self.acc = Dummy(DEFAULT_ACCELEROMETER_RATE)
-            self.mag = Dummy(DEFAULT_MAGNETOMETER_RATE)
+            self.mag = Dummy(DEFAULT_MAGNETOMETER_RATE, type='mag')
 
         self.acc.enable(self.q, self.lock)
         self.mag.enable(self.mag_q, self.mag_lock)
