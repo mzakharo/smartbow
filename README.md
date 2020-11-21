@@ -2,7 +2,8 @@
 
 * A FitBit for your bow
 * Smartphone App to attach a smartphone to a compound bow, and use smartphone's sensors to count arrows shot in a session, as well as review shot stability.
-* Produces a notification on every arrow shot, with notification bar displaying total number of shot arrows for a session. You can also use 'Digital Wellbeing' app on Android 10+ to track your progress over days.
+* Produces a notification on every arrow shot, with notification bar displaying total number of shot arrows for a session.
+* As a bonus, you can also use 'Digital Wellbeing' app on Android 10+ to track total arrows shot over days.
 * Tested with Galaxy S10
 * [Bow phone Mount](https://www.amazon.ca/Smartphone-Camera-Phone-IPhone-Samsung/dp/B00BVF6V5Q)
 
