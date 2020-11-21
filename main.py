@@ -239,9 +239,12 @@ class SmartBow(App):
         path = storagepath.get_external_storage_dir() if platform == 'android' else '.'
         config_file = os.path.join(path, 'smartbow_config.json')
         config = {}
-        if os.path.isfile(config_file):
-            with open(config_file, 'r') as f:
-                config = json.loads(f.read())
+        try:
+            if os.path.isfile(config_file):
+                with open(config_file, 'r') as f:
+                    config = json.loads(f.read())
+        except PermissionError:
+            print('WARNING: no permissions given to access', config_file)
         worker = Worker(config=config)
         screen2 = OrientationScreen(name='orientation_screen', worker=worker)
         sm.add_widget(screen2)
