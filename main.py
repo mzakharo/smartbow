@@ -2,7 +2,7 @@ from kivy.uix.label import Label
 from kivy.lang import Builder
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
-from kivy_garden.graph import MeshLinePlot
+from kivy_garden.graph import MeshLinePlot, LinePlot
 from kivy.clock import Clock
 from kivy.uix.screenmanager import ScreenManager, Screen
 
@@ -121,7 +121,7 @@ class MainScreen(CommonScreen):
     def __init__(self, **kwargs):
         self.worker = kwargs.pop('worker')
         super().__init__(**kwargs)
-        self.px = MeshLinePlot(color=[1, 0, 0, 1])
+        self.px = MeshLinePlot(color=[1, 1, 0, 1])
         self.py = MeshLinePlot(color=[0, 1, 0, 1])
         self.pz = MeshLinePlot(color=[1, 1, 0, 1])
         self.first_run = True
@@ -166,9 +166,10 @@ class OrientationScreen(CommonScreen):
     def __init__(self, **kwargs):
         self.worker = kwargs.pop('worker')
         super().__init__(**kwargs)
-        self.plots = [  MeshLinePlot(color=[1, 0, 0, 1]),
-                        MeshLinePlot(color=[0, 1, 0, 1]),
-                        MeshLinePlot(color=[1, 1, 0, 1]),
+        lw = 3
+        self.plots = [  LinePlot(color=[1, 1, 0, 1], line_width=lw),
+                        LinePlot(color=[0, 1, 0, 1], line_width=lw),
+                        LinePlot(color=[1, 1, 0, 1], line_width=lw),
                         ]
         self.first_run = True
         self.enabled = False
@@ -203,7 +204,9 @@ class OrientationScreen(CommonScreen):
                 gr = getattr(self.ids, f'graph{i}')
                 values = points[i]
                 if i == 0:
-                    values = moving_average(values, n=13)
+                    values = moving_average(values, n=10)
+                else:
+                    values = moving_average(values, n=3)
                 gr.xmax = len(values)
                 plot.points = enumerate(values)
 
