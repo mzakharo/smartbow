@@ -37,6 +37,7 @@ version.filename = %(source.dir)s/RELEASE_VERSION.py
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
 requirements = python3,kivy==2.0.0rc4,plyer,kivy_garden.graph,numpy,influxdb-client,urllib3,rx,python_dateutil,pytz
+#requirements = python3,kivy==2.0.0rc4,plyer,kivy_garden.graph,numpy,scipy,influxdb-client,urllib3,rx,python_dateutil,pytz
 
 # (str) Custom source folders for requirements
 # Sets custom source for any requirements with recipes
@@ -239,7 +240,7 @@ android.arch = arm64-v8a
 #p4a.source_dir =
 
 # (str) The directory in which python-for-android should look for your own build recipes (if any)
-#p4a.local_recipes =
+p4a.local_recipes = recipes
 
 # (str) Filename to the hook for p4a
 #p4a.hook =
