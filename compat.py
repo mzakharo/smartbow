@@ -1,4 +1,5 @@
 from plyer.utils import platform
+from plyer import storagepath
 import threading
 import time
 from collections import deque
@@ -225,4 +226,9 @@ class Accelerometer:
 
 accelerometer = Accelerometer()
 
+def get_application_dir():
+    if platform == 'android':
+        return activity.getFilesDir().getPath()
+    else:
+        return storagepath.get_application_dir()
 

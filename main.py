@@ -12,7 +12,7 @@ import datetime
 import threading
 import numpy as np
 from plyer import notification
-from compat import accelerometer, LockScreen
+from compat import accelerometer, LockScreen, get_application_dir
 from plyer import uniqueid
 
 from influxdb_client import InfluxDBClient, Point, WritePrecision
@@ -21,7 +21,7 @@ from queue import Queue
 
 from urllib3 import Retry
 from config import *
-import os, json
+import os, json, pickle
 
 from plyer import storagepath
 from plyer.utils import platform
@@ -33,6 +33,15 @@ def moving_average(a, n=6):
 
 class Worker:
     def __init__(self, config):
+        today_cache = os.path.join(get_application_dir(), f'cache-{datetime.date.today()}.pickle')
+        try:
+            with open(today_cache, 'rb') as f:
+                cache = pickle.load(f)
+            self.shot_count = cache['shot_count']
+        except Exception as e:
+            print(e)
+            self.shot_count = 0
+
         retries = Retry(connect=5, read=2, redirect=5)
         valid = 'influx_org' in config and 'influx_bucket' in config and 'influx_token' in config and 'influx_url' in config
         if valid:
@@ -48,6 +57,12 @@ class Worker:
         self.q = Queue()
         do_th = threading.Thread(target=self.do, daemon=True)
         do_th.start()
+
+    def register_shot(self):
+        self.shot_count += 1
+        today_cache = os.path.join(get_application_dir(), f'cache-{datetime.date.today()}.pickle')
+        with open(today_cache, 'wb') as f:
+            pickle.dump(dict(shot_count=self.shot_count), f)
 
     def process(self):
         cmd, val = self.q.get()
@@ -84,7 +99,6 @@ class Worker:
                 print(e)
 
 class CommonScreen(Screen):
-    shot_count = 0
     freeze_point = None
     shot_time = 0
 
@@ -116,10 +130,10 @@ class CommonScreen(Screen):
         this_time = time.time()
         pmax = np.abs(points).max()
         if pmax > SHOT_THRESH and (this_time- self.shot_time) > 4:
-            CommonScreen.shot_count += 1
+            self.worker.register_shot()
             self.shot = pmax
             self.shot_time = this_time
-            self.message=f'{datetime.datetime.now()}: value - {self.shot:.1f} shot # {self.shot_count}'
+            self.message=f'{datetime.datetime.now()}: value - {self.shot:.1f} shot # {self.worker.shot_count}'
             Clock.schedule_once(self.notify)
             self.worker.q.put(('shot', (self.shot_time, self.shot)))
             self.freeze_point = this_time + (points.shape[1] / rate * 0.3)
@@ -208,7 +222,7 @@ class OrientationScreen(CommonScreen):
 
         force_update = self.detect_shot(acc_points, rate)
         self.update_cnt += 1
-        self.ids.label.text =  f'Shot #{self.shot_count} | Mag {rate:.1f} | Acc {acc_rate:.1f}'
+        self.ids.label.text =  f'Shot #{self.worker.shot_count} | Mag {rate:.1f} | Acc {acc_rate:.1f}'
         #slow down graph update to lower cpu usage
         if self.update_cnt == GRAPH_RATE or force_update: 
             self.update_cnt = 0
@@ -231,6 +245,7 @@ class OrientationScreen(CommonScreen):
 
 class SmartBow(App): 
     def build(self): 
+
         self.screen = Builder.load_file('look.kv')
         sm = self.screen.ids.sm
 
@@ -253,6 +268,8 @@ class SmartBow(App):
         sm.add_widget(self.screen2)
         self.main = MainScreen(name='main', worker=worker)
         sm.add_widget(self.main)
+
+
         return self.screen
 
     def on_resume(self):
