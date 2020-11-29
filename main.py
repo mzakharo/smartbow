@@ -1,3 +1,6 @@
+import os
+os.environ["KIVY_NO_FILELOG"] = "1"
+
 from kivy.uix.label import Label 
 from kivy.lang import Builder
 from kivy.app import App
@@ -5,7 +8,7 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy_garden.graph import MeshLinePlot, LinePlot
 from kivy.clock import Clock
 from kivy.uix.screenmanager import ScreenManager, Screen
-
+from kivy.logger import Logger as log
 
 import time
 import datetime
@@ -21,7 +24,7 @@ from queue import Queue
 
 from urllib3 import Retry
 from config import *
-import os, json, pickle
+import json, pickle
 
 from plyer import storagepath
 from plyer.utils import platform
@@ -39,19 +42,19 @@ class Worker:
                 cache = pickle.load(f)
             self.shot_count = cache['shot_count']
         except Exception as e:
-            print(e)
+            log.info(f"cache: {e}")
             self.shot_count = 0
 
         retries = Retry(connect=5, read=2, redirect=5)
         valid = 'influx_org' in config and 'influx_bucket' in config and 'influx_token' in config and 'influx_url' in config
         if valid:
-            print('influx:', config['influx_url'])
+            log.info(f"influx: {config['influx_url']}")
             self.client = InfluxDBClient(url=config['influx_url'], token=config['influx_token'], timeout=10, retries=retries)
             self.bucket = config['influx_bucket']
             self.org = config['influx_org']
             self.write_api = self.client.write_api(write_options=SYNCHRONOUS) #ASYNC does not work due to sem_ impoementation missing
         else:
-            print('influx configuration not found')
+            log.info('influx: configuration is invalid')
             self.write_api = None
         self.id = uniqueid.id
         self.q = Queue()
@@ -71,7 +74,7 @@ class Worker:
                 self.write_api.write(self.bucket, self.org, val)
         elif cmd == 'shot':
             time, shot = val
-            print(cmd, time, shot)
+            log.info(f"upload: {cmd} {time} {shot}")
             point = Point("arrow").tag('id', self.id).field('shot', shot).time(int(time*10**9), WritePrecision.NS)
         elif cmd in ['orientation', 'acceleration']:
             start_time, rate, points = val
@@ -83,7 +86,7 @@ class Worker:
                     point = Point(cmd).tag('id', self.id).tag('idx', idx).field('value', value)
                     point.time(int((start_time + (i / rate ))*10**9), WritePrecision.NS)
                     send_buffer.append(point)
-            print('send_buffer', cmd, len(send_buffer))
+            log.info(f'upload: {cmd},  {len(send_buffer)}')
             if self.write_api is not None:
                 self.write_api.write(self.bucket, self.org, send_buffer)
 
@@ -96,7 +99,7 @@ class Worker:
             try:
                 self.process()
             except Exception as e:
-                print(e)
+                log.warning(f'do: {e}')
 
 class CommonScreen(Screen):
     freeze_point = None
@@ -111,15 +114,15 @@ class CommonScreen(Screen):
             self.ids.toggle.text = 'START'
 
     def on_enter(self):
-        print(self.name, 'on enter')
+        log.info(f'{self.name}: on enter')
         self.start()
 
     def on_leave(self):
-        print(self.name, 'on leave')
+        log.info(f'{self.name}: on leave')
         self.stop()
 
     def stop(self):
-        print(self.name, 'stop')
+        log.info(f'{self.name}: stop')
         Clock.unschedule(self.get_value)
         self.enabled = False
 
@@ -129,14 +132,14 @@ class CommonScreen(Screen):
     def detect_shot(self, points, rate):
         this_time = time.time()
         pmax = np.abs(points).max()
-        if pmax > SHOT_THRESH and (this_time- self.shot_time) > 4:
+        if pmax > SHOT_THRESH and (this_time - self.shot_time) > 4: # 4 sec to handle ringing
             self.worker.register_shot()
             self.shot = pmax
             self.shot_time = this_time
             self.message=f'{datetime.datetime.now()}: value - {self.shot:.1f} shot # {self.worker.shot_count}'
             Clock.schedule_once(self.notify)
             self.worker.q.put(('shot', (self.shot_time, self.shot)))
-            self.freeze_point = this_time + (points.shape[1] / rate * 0.3)
+            self.freeze_point = this_time + (points.shape[1] / rate * POST_SHOT_CAPTURE)
 
         if self.freeze_point is not None and this_time > self.freeze_point:
             force_update = True
@@ -157,7 +160,7 @@ class MainScreen(CommonScreen):
         self.enabled = False
 
     def start(self):
-        print(self.name, 'start')
+        log.info(f'{self.name}: start')
         if self.first_run:
             self.first_run = False
             self.ids.graph.add_plot(self.px)
@@ -177,7 +180,7 @@ class MainScreen(CommonScreen):
         if self.update_cnt == GRAPH_RATE or force_update: 
             self.update_cnt = 0
             if force_update:
-                self.update_cnt = -int(10 / POLL_RATE) #freeze graph after shot
+                self.update_cnt = -int(GRAPH_FREEZE / POLL_RATE) #freeze graph after shot
                 self.worker.q.put(('acceleration', (self.shot_time, rate, points)))
             gr = self.ids.graph
             gr.ymax = min(GRAPH_Y_LIMIT, max(1, int(points.max() + 1)))
@@ -204,7 +207,7 @@ class OrientationScreen(CommonScreen):
         self.enabled = False
 
     def start(self):
-        print(self.name, 'start')
+        log.info(f'{self.name}: start')
         if self.first_run:
             self.first_run = False
             for i, plot in enumerate(self.plots):
@@ -227,25 +230,18 @@ class OrientationScreen(CommonScreen):
         if self.update_cnt == GRAPH_RATE or force_update: 
             self.update_cnt = 0
             if force_update:
-                self.update_cnt = -int(10 / POLL_RATE) #freeze graph after shot
+                self.update_cnt = -int(GRAPH_FREEZE / POLL_RATE) #freeze graph after shot
                 self.worker.q.put(('orientation', (self.shot_time, rate, points)))
                 #self.worker.q.put(('acceleration', (self.shot_time, rate, acc_points)))
 
             for i, plot in enumerate(self.plots):
                 gr = getattr(self.ids, f'graph{i}')
                 values = points[i]
-                '''
-                if i == 0:
-                    values = moving_average(values, n=10)
-                else:
-                    values = moving_average(values, n=3)
-                '''
                 gr.xmax = len(values)
                 plot.points = enumerate(values)
 
 class SmartBow(App): 
     def build(self): 
-
         self.screen = Builder.load_file('look.kv')
         sm = self.screen.ids.sm
 
@@ -258,11 +254,7 @@ class SmartBow(App):
                 with open(config_file, 'r') as f:
                     config = json.loads(f.read())
         except PermissionError:
-            print('WARNING: no permissions to access', config_file)
-            if platform == 'android': #KIVY bug: checking permissions on every run makes minimize app not work
-                from android.permissions import request_permissions, Permission
-                request_permissions([Permission.READ_EXTERNAL_STORAGE])
-
+            log.warning(f'build: no permissions to access {config_file}')
         worker = Worker(config=config)
         self.screen2 = OrientationScreen(name='orientation_screen', worker=worker)
         sm.add_widget(self.screen2)
@@ -292,4 +284,15 @@ class SmartBow(App):
         return True
 
 if __name__ == "__main__":
+
+    if platform == 'android':
+        done = 0 
+        def callback(a, b):
+            global done
+            done += 1
+        from android.permissions import request_permissions, Permission
+        request_permissions([Permission.READ_EXTERNAL_STORAGE], callback=callback)
+        while not done:
+            time.sleep(0.05)
+
     SmartBow().run()     
