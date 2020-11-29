@@ -208,7 +208,7 @@ class OrientationScreen(CommonScreen):
 
         force_update = self.detect_shot(acc_points, rate)
         self.update_cnt += 1
-        self.ids.label.text =  f'Samples/sec: Mag {rate:.1f} | Acc {acc_rate:.1f}'
+        self.ids.label.text =  f'Shot #{self.shot_count} | Mag {rate:.1f} | Acc {acc_rate:.1f}'
         #slow down graph update to lower cpu usage
         if self.update_cnt == GRAPH_RATE or force_update: 
             self.update_cnt = 0
@@ -216,13 +216,16 @@ class OrientationScreen(CommonScreen):
                 self.update_cnt = -int(10 / POLL_RATE) #freeze graph after shot
                 self.worker.q.put(('orientation', (self.shot_time, rate, points)))
                 #self.worker.q.put(('acceleration', (self.shot_time, rate, acc_points)))
+
             for i, plot in enumerate(self.plots):
                 gr = getattr(self.ids, f'graph{i}')
                 values = points[i]
+                '''
                 if i == 0:
                     values = moving_average(values, n=10)
                 else:
                     values = moving_average(values, n=3)
+                '''
                 gr.xmax = len(values)
                 plot.points = enumerate(values)
 
