@@ -1,4 +1,4 @@
-<MainScreen>:
+<AccelerometerScreen>:
     BoxLayout:
         orientation: "vertical"
         BoxLayout:
@@ -33,7 +33,7 @@
                 bold: True
                 on_press:
                     root.manager.transition.direction = 'right'
-                    root.manager.current = 'main'
+                    root.manager.current = 'accelerometer_screen'
             Label:
                 id: label
             Button:

@@ -6,9 +6,9 @@ DEFAULT_ACCELEROMETER_RATE = 500  #Galaxy S10
 DEFAULT_MAGNETOMETER_RATE = 100 # Galaxy S10
 
 ACCELEROMETER_BUFFER_LEN = 500 #point buffer history length
-SHOT_THRESH = 60 #when to detect a shot
+EVENT_THRESH = 60 #when to detect an event
 
-POST_SHOT_CAPTURE = 0.3 #percentage of points that will be displayed after shot is detected
+POST_EVENT_CAPTURE = 0.3 #percentage of points that will be displayed after event is detected
 GRAPH_FREEZE = 8  #how many seconds to freeze graphs after shot is detected:w
 
 

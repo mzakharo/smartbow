@@ -41,7 +41,7 @@ class Worker:
         try:
             with open(self.today_cache, 'rb') as f:
                 cache = pickle.load(f)
-            self.shot_count = cache['shot_count']
+            self.event_count = cache['event_count']
         except Exception as e:
             log.info(f"cache: {e}")
 
@@ -63,22 +63,22 @@ class Worker:
 
     def gen_cache(self):
         today = str(datetime.date.today())
-        #reset shot count at 0 on new day
+        #reset event count at 0 on new day
         if today not in self.today_cache:
-            self.shot_count = 0
+            self.event_count = 0
             self.today_cache = os.path.join(get_application_dir(), f'cache-{datetime.date.today()}.pickle')
 
-    def register_shot(self):
-        self.shot_count += 1
+    def register_event(self):
+        self.event_count += 1
         with open(self.today_cache, 'wb') as f:
-            pickle.dump(dict(shot_count=self.shot_count), f)
+            pickle.dump(dict(event_count=self.event_count), f)
 
     def process(self):
         cmd, val = self.q.get()
-        if cmd == 'shot':
+        if cmd == 'event':
             time, magnitude = val
             log.info(f"upload: {cmd} {time} {magnitude}")
-            point = Point("arrow").tag('id', self.id).field('value', magnitude).time(int(time*10**9), WritePrecision.NS)
+            point = Point("event").tag('id', self.id).field('value', magnitude).time(int(time*10**9), WritePrecision.NS)
             if self.write_api is not None:
                 self.write_api.write(self.bucket, self.org, point)
         elif cmd in ['orientation', 'acceleration']:
@@ -108,7 +108,7 @@ class Worker:
 
 class CommonScreen(Screen):
     freeze_point = None
-    shot_time = 0
+    event_time = 0
 
     def on_press(self):
         if not self.enabled:
@@ -134,19 +134,19 @@ class CommonScreen(Screen):
     def notify(self, dt):
         notification.notify(title='>-------->', message=self.message)           
 
-    def detect_shot(self, points, rate):
+    def detect_event(self, points, rate):
         self.worker.gen_cache()
         this_time = time.time()
         pmax = np.abs(points).max()
         detected = False
-        if pmax > SHOT_THRESH and (this_time - self.shot_time) > 4: # 4 sec to handle ringing
-            self.worker.register_shot()
-            self.shot = pmax
-            self.shot_time = this_time
-            self.message=f'{datetime.datetime.now()}: value - {self.shot:.1f} shot # {self.worker.shot_count}'
+        if pmax > EVENT_THRESH and (this_time - self.event_time) > 4: # 4 sec to handle ringing
+            self.worker.register_event()
+            self.event = pmax
+            self.event_time = this_time
+            self.message=f'{datetime.datetime.now().strftime("%a, %H:%M:%S")}: Count # {self.worker.event_count}'
             Clock.schedule_once(self.notify)
-            self.worker.q.put(('shot', (self.shot_time, self.shot)))
-            self.freeze_point = this_time + (points.shape[1] / rate * POST_SHOT_CAPTURE)
+            self.worker.q.put(('event', (self.event_time, self.event)))
+            self.freeze_point = this_time + (points.shape[1] / rate * POST_EVENT_CAPTURE)
             detected = True
 
         if self.freeze_point is not None and this_time > self.freeze_point:
@@ -157,7 +157,7 @@ class CommonScreen(Screen):
         return detected, force_update
 
 
-class MainScreen(CommonScreen):
+class AccelerometerScreen(CommonScreen):
     def __init__(self, **kwargs):
         self.worker = kwargs.pop('worker')
         super().__init__(**kwargs)
@@ -183,13 +183,13 @@ class MainScreen(CommonScreen):
         with accelerometer.lock:
             points  = np.array(accelerometer.q).T
             rate = accelerometer.rate
-        detected, force_update = self.detect_shot(points, rate)
+        detected, force_update = self.detect_event(points, rate)
         self.update_cnt += 1
         if self.update_cnt == GRAPH_RATE or force_update: 
             self.update_cnt = 0
             if force_update:
-                self.update_cnt = -int(GRAPH_FREEZE / POLL_RATE) #freeze graph after shot
-                self.worker.q.put(('acceleration', (self.shot_time, rate, points)))
+                self.update_cnt = -int(GRAPH_FREEZE / POLL_RATE) #freeze graph after event
+                self.worker.q.put(('acceleration', (self.event_time, rate, points)))
             gr = self.ids.graph
             gr.ymax = min(GRAPH_Y_LIMIT, max(1, int(points.max() + 1)))
             gr.ymin = max(-GRAPH_Y_LIMIT, min(int(points.min()-1), gr.ymax-1))
@@ -232,7 +232,7 @@ class OrientationScreen(CommonScreen):
             acc_rate = accelerometer.rate
             acc_points  = np.array(accelerometer.q).T
 
-        detected, force_update = self.detect_shot(acc_points, rate)
+        detected, force_update = self.detect_event(acc_points, rate)
         if detected:
             #assume at least 1 second buffer
             fro = -int(accelerometer.mag_rate)
@@ -240,14 +240,14 @@ class OrientationScreen(CommonScreen):
             self.midpoint = np.median(points[:, fro:to], axis=-1)
 
         self.update_cnt += 1
-        self.ids.label.text =  f'Shot #{self.worker.shot_count} | Mag {rate:.1f} | Acc {acc_rate:.1f}'
+        self.ids.label.text =  f'Count #{self.worker.event_count} | Mag {rate:.1f} | Acc {acc_rate:.1f}'
         #slow down graph update to lower cpu usage
         if self.update_cnt == GRAPH_RATE or force_update: 
             self.update_cnt = 0
             if force_update:
-                self.update_cnt = -int(GRAPH_FREEZE / POLL_RATE) #freeze graph after shot
-                self.worker.q.put(('orientation', (self.shot_time, rate, points)))
-                #self.worker.q.put(('acceleration', (self.shot_time, rate, acc_points)))
+                self.update_cnt = -int(GRAPH_FREEZE / POLL_RATE) #freeze graph after event
+                self.worker.q.put(('orientation', (self.event_time, rate, points)))
+                #self.worker.q.put(('acceleration', (self.event_time, rate, acc_points)))
 
             for i, plot in enumerate(self.plots):
                 gr = getattr(self.ids, f'graph{i}')
@@ -284,11 +284,12 @@ class SmartBow(App):
                     config = json.loads(f.read())
         except PermissionError:
             log.warning(f'build: no permissions to access {config_file}')
+
         worker = Worker(config=config)
-        self.screen2 = OrientationScreen(name='orientation_screen', worker=worker)
-        sm.add_widget(self.screen2)
-        self.main = MainScreen(name='main', worker=worker)
-        sm.add_widget(self.main)
+        screen = OrientationScreen(name='orientation_screen', worker=worker)
+        sm.add_widget(screen)
+        screen = AccelerometerScreen(name='accelerometer_screen', worker=worker)
+        sm.add_widget(screen)
 
 
         return self.screen
