@@ -13,9 +13,9 @@
 
 ## Installation
 
-Sideload latest APK from [Release section](https://github.com/mzakharo/smartbow/releases)
+Sideload the latest APK from [Release section](https://github.com/mzakharo/smartbow/releases)
 
-##  InfluxDB 2.0 setup (Optional)
+##  InfluxDB setup (Optional)
 
 If you want to upload arrow count/orientation sensor info into InfluxDB database, then either obtain free InfluxDB instance from https://cloud2.influxdata.com/signup, edit and add a [smartbow_config.json](/smartbow_config.json) to the root of internal storage (`/sdcard`)
 
