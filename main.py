@@ -49,7 +49,7 @@ class Worker:
         valid = 'influx_org' in config and 'influx_bucket' in config and 'influx_token' in config and 'influx_url' in config
         if valid:
             log.info(f"influx: {config['influx_url']}")
-            self.client = InfluxDBClient(url=config['influx_url'], token=config['influx_token'], timeout=10, retries=retries)
+            self.client = InfluxDBClient(url=config['influx_url'], token=config['influx_token'], timeout=10, retries=retries, enable_gzip=True)
             self.bucket = config['influx_bucket']
             self.org = config['influx_org']
             self.write_api = self.client.write_api(write_options=SYNCHRONOUS) #ASYNC does not work due to sem_ impoementation missing
@@ -132,6 +132,7 @@ class CommonScreen(Screen):
     def detect_shot(self, points, rate):
         this_time = time.time()
         pmax = np.abs(points).max()
+        detected = False
         if pmax > SHOT_THRESH and (this_time - self.shot_time) > 4: # 4 sec to handle ringing
             self.worker.register_shot()
             self.shot = pmax
@@ -140,13 +141,14 @@ class CommonScreen(Screen):
             Clock.schedule_once(self.notify)
             self.worker.q.put(('shot', (self.shot_time, self.shot)))
             self.freeze_point = this_time + (points.shape[1] / rate * POST_SHOT_CAPTURE)
+            detected = True
 
         if self.freeze_point is not None and this_time > self.freeze_point:
             force_update = True
             self.freeze_point = None
         else:
             force_update = False
-        return force_update
+        return detected, force_update
 
 
 class MainScreen(CommonScreen):
@@ -175,7 +177,7 @@ class MainScreen(CommonScreen):
         with accelerometer.lock:
             points  = np.array(accelerometer.q).T
             rate = accelerometer.rate
-        force_update = self.detect_shot(points, rate)
+        detected, force_update = self.detect_shot(points, rate)
         self.update_cnt += 1
         if self.update_cnt == GRAPH_RATE or force_update: 
             self.update_cnt = 0
@@ -205,6 +207,7 @@ class OrientationScreen(CommonScreen):
                         ]
         self.first_run = True
         self.enabled = False
+        self.gr_cache = {}
 
     def start(self):
         log.info(f'{self.name}: start')
@@ -223,7 +226,13 @@ class OrientationScreen(CommonScreen):
             acc_rate = accelerometer.rate
             acc_points  = np.array(accelerometer.q).T
 
-        force_update = self.detect_shot(acc_points, rate)
+        detected, force_update = self.detect_shot(acc_points, rate)
+        if detected:
+            #assume at least 1 second buffer
+            fro = -int(accelerometer.mag_rate)
+            to =  -int(accelerometer.mag_rate/4)
+            self.midpoint = np.median(points[:, fro:to], axis=-1)
+
         self.update_cnt += 1
         self.ids.label.text =  f'Shot #{self.worker.shot_count} | Mag {rate:.1f} | Acc {acc_rate:.1f}'
         #slow down graph update to lower cpu usage
@@ -237,6 +246,20 @@ class OrientationScreen(CommonScreen):
             for i, plot in enumerate(self.plots):
                 gr = getattr(self.ids, f'graph{i}')
                 values = points[i]
+                if force_update:
+                    self.gr_cache[gr] = (gr.ymax, gr.ymin, gr.y_ticks_major)
+                    midpoint = int(np.round(self.midpoint[i]))
+                    ZOOM_DEGREES = 20
+                    if i == 0:  #Azimuth has more noise?
+                        ZOOM_DEGREES += ZOOM_DEGREES 
+                    gr.ymax = midpoint + ZOOM_DEGREES
+                    gr.ymin = midpoint - ZOOM_DEGREES
+                    gr.y_ticks_major = int((gr.ymax - gr.ymin) / 10)
+                else:
+                    cache = self.gr_cache.pop(gr, None)
+                    if cache is not None:
+                        gr.ymax, gr.ymin, gr.y_ticks_major = cache
+
                 gr.xmax = len(values)
                 plot.points = enumerate(values)
 
