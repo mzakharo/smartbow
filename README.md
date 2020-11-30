@@ -20,7 +20,7 @@ Download and install the latest APK from the [Release section](https://github.co
  * You can upload each shot timestamp + raw orientation sensor data into your private InfluxDB database, for offline analsys/data science
 ![InfluxDB](/extra/influx.png?raw=true "Orientation")
  * You can obtain a free [InfluxDB account](https://cloud2.influxdata.com/signup)
- * Edit and add a [smartbow_config.json](/smartbow_config.json) to the root of internal storage (`/sdcard`)
+ * Edit and add a [smartbow_config.json](/smartbow_config.json) to the root of the internal storage (`/sdcard`)
 
 # APK Build instructions
 
