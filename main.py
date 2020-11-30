@@ -36,14 +36,14 @@ def moving_average(a, n=6):
 
 class Worker:
     def __init__(self, config):
-        today_cache = os.path.join(get_application_dir(), f'cache-{datetime.date.today()}.pickle')
+        self.today_cache = ''
+        self.gen_cache()
         try:
-            with open(today_cache, 'rb') as f:
+            with open(self.today_cache, 'rb') as f:
                 cache = pickle.load(f)
             self.shot_count = cache['shot_count']
         except Exception as e:
             log.info(f"cache: {e}")
-            self.shot_count = 0
 
         retries = Retry(connect=5, read=2, redirect=5)
         valid = 'influx_org' in config and 'influx_bucket' in config and 'influx_token' in config and 'influx_url' in config
@@ -61,10 +61,16 @@ class Worker:
         do_th = threading.Thread(target=self.do, daemon=True)
         do_th.start()
 
+    def gen_cache(self):
+        today = str(datetime.date.today())
+        #reset shot count at 0 on new day
+        if today not in self.today_cache:
+            self.shot_count = 0
+            self.today_cache = os.path.join(get_application_dir(), f'cache-{datetime.date.today()}.pickle')
+
     def register_shot(self):
         self.shot_count += 1
-        today_cache = os.path.join(get_application_dir(), f'cache-{datetime.date.today()}.pickle')
-        with open(today_cache, 'wb') as f:
+        with open(self.today_cache, 'wb') as f:
             pickle.dump(dict(shot_count=self.shot_count), f)
 
     def process(self):
@@ -130,6 +136,7 @@ class CommonScreen(Screen):
         notification.notify(title='>-------->', message=self.message)           
 
     def detect_shot(self, points, rate):
+        self.worker.gen_cache()
         this_time = time.time()
         pmax = np.abs(points).max()
         detected = False
