@@ -76,9 +76,9 @@ class Worker:
     def process(self):
         cmd, val = self.q.get()
         if cmd == 'shot':
-            time, shot = val
+            time, magnitude = val
             log.info(f"upload: {cmd} {time} {shot}")
-            point = Point("arrow").tag('id', self.id).field('shot', shot).time(int(time*10**9), WritePrecision.NS)
+            point = Point("arrow").tag('id', self.id).field('value', magnitude).time(int(time*10**9), WritePrecision.NS)
             if self.write_api is not None:
                 self.write_api.write(self.bucket, self.org, point)
         elif cmd in ['orientation', 'acceleration']:
