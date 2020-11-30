@@ -253,7 +253,8 @@ class OrientationScreen(CommonScreen):
                 gr = getattr(self.ids, f'graph{i}')
                 values = points[i]
                 if force_update:
-                    self.gr_cache[gr] = (gr.ymax, gr.ymin, gr.y_ticks_major)
+                    if gr not in self.gr_cache:
+                        self.gr_cache[gr] = (gr.ymax, gr.ymin, gr.y_ticks_major)
                     midpoint = int(np.round(self.midpoint[i]))
                     ZOOM_DEGREES = 20
                     if i == 0:  #Azimuth has more noise?
