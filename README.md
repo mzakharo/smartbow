@@ -1,8 +1,8 @@
 #  Project description
 
 * A FitBit for your bow
-* Smartphone App to attach a smartphone to a compound bow, and use smartphone's sensors to count arrows shot in a session, as well as review shot stability.
-* Produces a notification on every arrow shot, with notification bar displaying total number of shot arrows for a session.
+* Smartphone App to attach a smartphone to a compound bow, and use smartphone's sensors to count arrows shot in a session, as well as review shot stability using Android Orientation API (Accelermoter + Magnetometer).
+* Produces a notification on every arrow shot, with notification bar displaying total number of shot arrows for the day.
 * Tested with Galaxy S10
 * [Bow phone Mount](https://www.amazon.ca/Smartphone-Camera-Phone-IPhone-Samsung/dp/B00BVF6V5Q)
 
@@ -11,17 +11,14 @@
 * As a bonus, you can also use 'Digital Wellbeing' app on Android 10+ to track total arrows shot over days.
 ![Digital Wellbeing](/extra/wellbeing.png?raw=true "Digital Wellbeing")
 
+## Installation
+
+Sideload latest APK from [Release section](https://github.com/mzakharo/smartbow/releases)
+
 ##  InfluxDB 2.0 setup (Optional)
 
 If you want to upload arrow count/orientation sensor info into InfluxDB database, then either obtain free InfluxDB instance from https://cloud2.influxdata.com/signup, edit and add a smartbow_config.json to /sdcard
 
-
-## Setup android adb on Linux
-```
-lsusb  to get vendor/product
-cp 51-android.rules /etc/udev/rules.d/
-sudo udevadm control --reload-rules
-```
 
 # APK Build instructions
 
@@ -55,4 +52,12 @@ sudo apt install ccache
 
 ## log
 ```./logcat.sh```
+
+## Linux adb permissions 
+```
+lsusb  to get vendor/product
+cp 51-android.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules
+```
+
 
