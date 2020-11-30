@@ -17,7 +17,9 @@ Download and install the latest APK from the [Release section](https://github.co
 
 ##  InfluxDB setup (Optional)
 
-If you want to upload arrow count/orientation sensor info into InfluxDB database, then either obtain free InfluxDB instance from https://cloud2.influxdata.com/signup, edit and add a [smartbow_config.json](/smartbow_config.json) to the root of internal storage (`/sdcard`)
+ * You can upload each shot + raw orientation sensor data into InfluxDB database, for extra analsys/data science
+ * You can obtain a free InfluxDB account from https://cloud2.influxdata.com/signup, 
+ * Edit and add a [smartbow_config.json](/smartbow_config.json) to the root of internal storage (`/sdcard`)
 
 # APK Build instructions
 
