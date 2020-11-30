@@ -8,7 +8,7 @@
 
 ![Screenshot](/extra/screenshot1.png?raw=true "Main page")
 
-* As a bonus, you can also use 'Digital Wellbeing' app on Android 10+ to track total arrows shot over days.
+* As a bonus, you can also use the 'Digital Wellbeing' app on Android 10+ to track total arrows shot over days.
 ![Digital Wellbeing](/extra/wellbeing.png?raw=true "Digital Wellbeing")
 
 ## Installation
