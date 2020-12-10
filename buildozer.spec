@@ -36,7 +36,7 @@ version.filename = %(source.dir)s/RELEASE_VERSION.py
 
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
-requirements = python3,kivy==2.0.0rc4,plyer,kivy_garden.graph,numpy,influxdb-client,urllib3,rx,python_dateutil,pytz
+requirements = python3,kivy==2.0.0,plyer,kivy_garden.graph,numpy,influxdb-client,urllib3,rx,python_dateutil,pytz
 #requirements = python3,kivy==2.0.0rc4,plyer,kivy_garden.graph,numpy,scipy,influxdb-client,urllib3,rx,python_dateutil,pytz
 
 # (str) Custom source folders for requirements
