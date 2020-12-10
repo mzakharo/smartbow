@@ -25,6 +25,7 @@ from queue import Queue
 from urllib3 import Retry
 from config import *
 import json, pickle
+import traceback
 
 from plyer import storagepath
 from plyer.utils import platform
@@ -107,6 +108,8 @@ class Worker:
                 self.process()
             except Exception as e:
                 log.warning(f'do: {e}')
+                traceback.print_exc() 
+
 
 class CommonScreen(Screen):
     freeze_point = None

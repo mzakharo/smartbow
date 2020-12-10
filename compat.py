@@ -79,9 +79,9 @@ if platform == 'android':
             self.cnt += 1
             diff = tstamp - self.last_time 
             if diff >= 1e9:
-                self.last_time = t
+                self.rate = self.cnt / diff * 1e9
+                self.last_time = tstamp
                 self.cnt = 0
-                self.rate = self.cnt / diff
 
         @java_method('(Landroid/hardware/Sensor;I)V')
         def onAccuracyChanged(self, sensor, accuracy):
@@ -104,9 +104,9 @@ if platform == 'android':
         @java_method('(Landroid/hardware/SensorEvent;)V')
         def onSensorChanged(self, event):
             with self.lock:
-                self.small_q.append(event.values)
-                tstamp = event.tstamp
-                values = list(event.values)
+                self.small_q.append(np.array(event.values))
+                tstamp = event.timestamp
+                values = event.values
                 values.append(tstamp)
                 self.q.append(values)
                 self.calc_rate(tstamp)
@@ -130,7 +130,7 @@ if platform == 'android':
                 n = len(aq)
                 if n == 0:
                     return
-                acc_values = np.array(aq.popleft() for _ in range(n))
+                acc_values = np.array([aq.popleft() for _ in range(n)])
                 gravity = list(np.median(acc_values, axis=0))
                 #gravity = self.acc.values
                 geomagnetic = event.values
@@ -139,7 +139,7 @@ if platform == 'android':
                 if ff_state:
                     values = [0, 0, 0]
                     values = self.SensorManager.getOrientation(rotation, values)
-                    tstamp = event.tstamp
+                    tstamp = event.timestamp
                     values.append(tstamp)
                     self.q.append(values)
                     self.calc_rate(tstamp)
