@@ -66,7 +66,7 @@ class Worker:
         #reset event count at 0 on new day
         if today not in self.today_cache:
             self.event_count = 0
-            self.today_cache = os.path.join(get_application_dir(), f'cache-{datetime.date.today()}.pickle')
+            self.today_cache = os.path.join(get_application_dir(), f'cache-{today}.pickle')
 
     def register_event(self):
         self.event_count += 1
@@ -82,14 +82,16 @@ class Worker:
             if self.write_api is not None:
                 self.write_api.write(self.bucket, self.org, point)
         elif cmd in ['orientation', 'acceleration']:
-            start_time, rate, points = val
+            event_time, buf = val
+            points = buf[:3]
+            time = buf[3]
+            time += int(event_time * 10**9) - time[-1]
             num_points = points.shape[1]
             send_buffer = []
             for i in range(num_points):
                 values = points[:, i]
                 for idx, value in enumerate(values):
-                    point = Point(cmd).tag('id', self.id).tag('idx', idx).field('value', value)
-                    point.time(int((start_time + (i / rate ))*10**9), WritePrecision.NS)
+                    point = Point(cmd).tag('id', self.id).tag('idx', idx).field('value', value).time(time[i], WritePrecision.NS)
                     send_buffer.append(point)
             log.info(f'upload: {cmd},  {len(send_buffer)}')
             if self.write_api is not None:
@@ -134,22 +136,22 @@ class CommonScreen(Screen):
     def notify(self, dt):
         notification.notify(title='>-------->', message=self.message)           
 
-    def detect_event(self, points, rate):
+    def detect_event(self, this_time, points, rate):
         self.worker.gen_cache()
-        this_time = time.time()
         pmax = np.abs(points).max()
-        detected = False
         if pmax > EVENT_THRESH and (this_time - self.event_time) > 4: # 4 sec to handle ringing
             self.worker.register_event()
             self.event = pmax
             self.event_time = this_time
-            self.message=f'{datetime.datetime.now().strftime("%a, %H:%M:%S")}: Count # {self.worker.event_count}'
+            self.message=f'{datetime.datetime.fromtimestamp(this_time).strftime("%a, %H:%M:%S")}: Count # {self.worker.event_count}'
             Clock.schedule_once(self.notify)
             self.worker.q.put(('event', (self.event_time, self.event)))
-            self.freeze_point = this_time + (points.shape[1] / rate * POST_EVENT_CAPTURE)
+            self.freeze_point = this_time + ((points.shape[1] / rate * POST_EVENT_CAPTURE) if rate != 0 else 0)
             detected = True
+        else:
+            detected = False
 
-        if self.freeze_point is not None and this_time > self.freeze_point:
+        if self.freeze_point is not None and this_time >= self.freeze_point:
             force_update = True
             self.freeze_point = None
         else:
@@ -180,16 +182,19 @@ class AccelerometerScreen(CommonScreen):
         self.update_cnt = 0
 
     def get_value(self, dt):
+        this_time = time.time()
         with accelerometer.lock:
-            points  = np.array(accelerometer.q).T
-            rate = accelerometer.rate
-        detected, force_update = self.detect_event(points, rate)
+            acc_points = np.array(accelerometer.q).T
+            points = acc_points[:3]
+            rate = accelerometer.acc.rate
+        detected, force_update = self.detect_event(this_time, points, rate)
+
         self.update_cnt += 1
         if self.update_cnt == GRAPH_RATE or force_update: 
             self.update_cnt = 0
             if force_update:
                 self.update_cnt = -int(GRAPH_FREEZE / POLL_RATE) #freeze graph after event
-                self.worker.q.put(('acceleration', (self.event_time, rate, points)))
+                self.worker.q.put(('acceleration', (self.event_time, acc_points)))
             gr = self.ids.graph
             gr.ymax = min(GRAPH_Y_LIMIT, max(1, int(points.max() + 1)))
             gr.ymin = max(-GRAPH_Y_LIMIT, min(int(points.min()-1), gr.ymax-1))
@@ -226,17 +231,19 @@ class OrientationScreen(CommonScreen):
         self.update_cnt = 0
 
     def get_value(self, dt):
+        this_time = time.time()
         with accelerometer.lock:
-            points  = np.array(accelerometer.mag_q).T * 180 / np.pi
-            rate = accelerometer.mag_rate
-            acc_rate = accelerometer.rate
+            orientation = np.array(accelerometer.mag_q).T * 180 / np.pi
+            rate = accelerometer.mag.rate
+            points  = orientation[:3]
             acc_points  = np.array(accelerometer.q).T
+            acc_points = acc_points[:3]
+            acc_rate = accelerometer.acc.rate
 
-        detected, force_update = self.detect_event(acc_points, rate)
+        detected, force_update = self.detect_event(this_time, acc_points, rate)
         if detected:
-            #assume at least 1 second buffer
-            fro = -int(accelerometer.mag_rate)
-            to =  -int(accelerometer.mag_rate/4)
+            fro = -int(accelerometer.mag.rate)
+            to =  -int(accelerometer.mag.rate/4)
             self.midpoint = np.median(points[:, fro:to], axis=-1)
 
         self.update_cnt += 1
@@ -246,7 +253,7 @@ class OrientationScreen(CommonScreen):
             self.update_cnt = 0
             if force_update:
                 self.update_cnt = -int(GRAPH_FREEZE / POLL_RATE) #freeze graph after event
-                self.worker.q.put(('orientation', (self.event_time, rate, points)))
+                self.worker.q.put(('orientation', (self.event_time, orientation)))
                 #self.worker.q.put(('acceleration', (self.event_time, rate, acc_points)))
 
             for i, plot in enumerate(self.plots):

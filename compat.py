@@ -59,8 +59,7 @@ if platform == 'android':
         def __init__(self, default_rate):
             super().__init__()
             self.cnt = 0
-            self.rate = 0
-            self.rate_q = deque([default_rate], maxlen=10)
+            self.rate = default_rate
             self.values = [0.0, 0.0, 0.0]
 
         def enable(self, q, lock):
@@ -75,6 +74,15 @@ if platform == 'android':
         def disable(self):
             self.SensorManager.unregisterListener(self, self.sensor)
 
+
+        def calc_rate(self, tstamp):
+            self.cnt += 1
+            diff = tstamp - self.last_time 
+            if diff >= 1e9:
+                self.last_time = t
+                self.cnt = 0
+                self.rate = self.cnt / diff
+
         @java_method('(Landroid/hardware/Sensor;I)V')
         def onAccuracyChanged(self, sensor, accuracy):
             # Maybe, do something in future?
@@ -84,7 +92,7 @@ if platform == 'android':
         def __init__(self):
             super().__init__(default_rate=DEFAULT_ACCELEROMETER_RATE)
             self.name = 'acc'
-            self.small_q = deque(maxlen=30)
+            self.small_q = deque(maxlen=30) #hold accelerometer buffer for orientation (accelerometer is 5x sampling rate than magnetometer)
             self.SensorManager = cast(
                 'android.hardware.SensorManager',
                 activity.getSystemService(Context.SENSOR_SERVICE)
@@ -96,15 +104,12 @@ if platform == 'android':
         @java_method('(Landroid/hardware/SensorEvent;)V')
         def onSensorChanged(self, event):
             with self.lock:
-                self.cnt += 1
                 self.small_q.append(event.values)
-                self.q.append(event.values)
-                t = time.time()
-                if t - self.last_time > 1:
-                    self.rate_q.append(self.cnt)
-                    self.rate = mean(self.rate_q)
-                    self.last_time = t
-                    self.cnt = 0
+                tstamp = event.tstamp
+                values = list(event.values)
+                values.append(tstamp)
+                self.q.append(values)
+                self.calc_rate(tstamp)
 
 
 
@@ -121,33 +126,23 @@ if platform == 'android':
         @java_method('(Landroid/hardware/SensorEvent;)V')
         def onSensorChanged(self, event):
             with self.lock:
-                self.cnt += 1
-                self.values = event.values
-                t = time.time()
-
-                rotation = [0] * 9
-                inclination = [0] * 9
-                gravity = []
-                geomagnetic = []
-
                 aq = self.acc.small_q
                 n = len(aq)
                 if n == 0:
                     return
-                acc_values = np.array([aq.popleft() for _ in range(n)])
+                acc_values = np.array(aq.popleft() for _ in range(n))
                 gravity = list(np.median(acc_values, axis=0))
                 #gravity = self.acc.values
                 geomagnetic = event.values
-                ff_state = self.SensorManager.getRotationMatrix(rotation, inclination, gravity, geomagnetic )
+                rotation = [0] * 9
+                ff_state = self.SensorManager.getRotationMatrix(rotation, None, gravity, geomagnetic)
                 if ff_state:
                     values = [0, 0, 0]
                     values = self.SensorManager.getOrientation(rotation, values)
+                    tstamp = event.tstamp
+                    values.append(tstamp)
                     self.q.append(values)
-                    if t - self.last_time > 1:
-                        self.rate_q.append(self.cnt)
-                        self.rate = mean(self.rate_q)
-                        self.last_time = t
-                        self.cnt = 0
+                    self.calc_rate(tstamp)
 
 
 class Dummy:
@@ -155,22 +150,32 @@ class Dummy:
         self.rate = 0
         self._rate = _rate
         self.type = type
+        self.last_time = time.monotonic_ns()
+        self.cnt = 0
+
 
     def enable(self, q, lock):
         self.lock = lock
         self.q = q
         self.run = True
-        do_th = threading.Thread(target=self.do, daemon=True)
+        do_th = threading.Thread(target=self.do, daemon=True, name=self.type)
         do_th.start()
 
     def disable(self):
         self.run = False
 
+    def calc_rate(self, tstamp):
+        self.cnt += 1
+        diff = tstamp - self.last_time 
+        if diff >= 1e9:
+            self.last_time = tstamp
+            self.rate = self.cnt / diff * 1e9
+            self.cnt = 0
+
     def do(self):
-        cnt = 0
-        last_time = time.time()
         while self.run:
             time.sleep(1/self._rate)
+            tstamp = time.monotonic_ns()
             if self.type == 'mag':
                 azimuth = np.random.uniform(-np.pi, np.pi)
                 pitch = np.random.uniform(-np.pi/4, np.pi/4)
@@ -178,19 +183,16 @@ class Dummy:
                 data = np.array([azimuth, pitch, roll])
             else:
                 data = np.array([random() - 2 , random(), random() + 2 ])
+            data = list(data)
             with self.lock:
+                data.append(tstamp)
                 self.q.append(data)
-                cnt +=1
-                t = time.time()
-                if t - last_time > 1:
-                    self.rate = cnt
-                    last_time = t
-                    cnt = 0
+                self.calc_rate(tstamp)
 
 class Accelerometer:
     def __init__(self):
-        self.q = deque([(0, 0, 0)] * ACCELEROMETER_BUFFER_LEN, maxlen = ACCELEROMETER_BUFFER_LEN)
-        self.mag_q = deque([(0, 0, 0)] * ACCELEROMETER_BUFFER_LEN, maxlen = ACCELEROMETER_BUFFER_LEN)
+        self.q = deque([(0, 0, 0, 0)] * ACCELEROMETER_BUFFER_LEN, maxlen = ACCELEROMETER_BUFFER_LEN)
+        self.mag_q = deque([(0, 0, 0, 0)] * ACCELEROMETER_BUFFER_LEN, maxlen = ACCELEROMETER_BUFFER_LEN)
         self.lock = threading.Lock()
         self.mag_lock = threading.Lock()
         self.started = False
@@ -216,13 +218,7 @@ class Accelerometer:
         self.mag.disable()
         self.started = False
 
-    @property
-    def rate(self):
-        return self.acc.rate
-    @property
-    def mag_rate(self):
-        return self.mag.rate
-
+    
 
 accelerometer = Accelerometer()
 
