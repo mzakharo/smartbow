@@ -6,6 +6,8 @@ from collections import deque
 from random import random
 from statistics import mean
 import numpy as np
+import pandas as pd
+from kivy.logger import Logger as log
 
 from config import *
 
@@ -86,14 +88,21 @@ if platform == 'android':
 
         @java_method('(Landroid/hardware/Sensor;I)V')
         def onAccuracyChanged(self, sensor, accuracy):
-            # Maybe, do something in future?
-            pass
+            print('onAccuracyChanged', sensor, accuracy)
+
+        @java_method('(Landroid/hardware/SensorEvent;)V')
+        def onSensorChanged(self, event):
+            with self.lock:
+                self.q.append(event.values)
+                self.tq.append(event.timestamp)
+                self.calc_rate(event.timestamp)
+
+
 
     class AccelerometerSensorListener(SensorListener):
         def __init__(self):
             super().__init__(default_rate=DEFAULT_ACCELEROMETER_RATE)
             self.name = 'acc'
-            self.small_q = deque(maxlen=30) #hold accelerometer buffer for orientation (accelerometer is 5x sampling rate than magnetometer)
             self.SensorManager = cast(
                 'android.hardware.SensorManager',
                 activity.getSystemService(Context.SENSOR_SERVICE)
@@ -102,36 +111,21 @@ if platform == 'android':
                 Sensor.TYPE_ACCELEROMETER
             )
 
-        @java_method('(Landroid/hardware/SensorEvent;)V')
-        def onSensorChanged(self, event):
-            with self.lock:
-                self.small_q.append(event.values)
-                self.q.append(event.values)
-                self.tq.append(event.timestamp)
-                self.calc_rate(event.timestamp)
-
-
-
     class MagnetometerSensorListener(SensorListener):
         def __init__(self, acc):
             super().__init__(default_rate=DEFAULT_MAGNETOMETER_RATE)
-            self.name = 'spat'
-            self.acc = acc
+            self.name = 'mag'
             service = activity.getSystemService(Context.SENSOR_SERVICE)
             self.SensorManager = cast('android.hardware.SensorManager', service)
             self.sensor = self.SensorManager.getDefaultSensor(
                 Sensor.TYPE_MAGNETIC_FIELD)
 
+        '''
         @java_method('(Landroid/hardware/SensorEvent;)V')
         def onSensorChanged(self, event):
             with self.lock:
-                aq = self.acc.small_q
-                n = len(aq)
-                if n == 0:
-                    return
-                acc_values = np.array([aq.popleft() for _ in range(n)])
-                gravity = list(np.median(acc_values, axis=0))
-                #gravity = self.acc.values
+                print('acc', n)
+                self.last_acc_values = acc_values
                 geomagnetic = event.values
                 rotation = [0] * 9
                 ff_state = self.SensorManager.getRotationMatrix(rotation, None, gravity, geomagnetic)
@@ -141,6 +135,7 @@ if platform == 'android':
                     self.q.append(values)
                     self.tq.append(event.timestamp)
                     self.calc_rate(event.timestamp)
+        '''
 
 
 class Dummy:
@@ -150,7 +145,6 @@ class Dummy:
         self.type = type
         self.last_time = time.monotonic_ns()
         self.cnt = 0
-
 
     def enable(self, q, tq, lock):
         self.lock = lock
@@ -175,13 +169,7 @@ class Dummy:
         while self.run:
             time.sleep(1/self._rate)
             tstamp = time.monotonic_ns()
-            if self.type == 'mag':
-                azimuth = np.random.uniform(-np.pi, np.pi)
-                pitch = np.random.uniform(-np.pi/4, np.pi/4)
-                roll = np.random.uniform(-np.pi, 0)
-                data = np.array([azimuth, pitch, roll])
-            else:
-                data = np.array([random() - 2 , random(), random() + 2 ])
+            data = np.array([random() - 2 , random(), random() + 2 ])
             data = list(data)
             with self.lock:
                 self.q.append(data)
@@ -191,7 +179,7 @@ class Dummy:
 class Accelerometer:
     def __init__(self):
         def iq(x, m):
-            return deque( [x] * m, maxlen=m) 
+            return deque([x] * m, maxlen=m) 
         self.q = iq((0.0, 0.0, 0.0), ACCELEROMETER_BUFFER_LEN)
         self.tq = iq(0, ACCELEROMETER_BUFFER_LEN)
         self.mag_q = iq((0.0, 0.0, 0.0), ORIENTATION_BUFFER_LEN)
@@ -231,3 +219,39 @@ def get_application_dir():
     else:
         return storagepath.get_application_dir()
 
+def getRotationMatrix(rotation,b,gravity,geomagnetic):
+    if platform == 'android':
+        return SensorManager.getRotationMatrix(rotation, None, gravity, geomagnetic)
+    return True
+
+def getOrientation(rotation, values):
+    if platform == 'android':
+        return SensorManager.getOrientation(rotation, values)
+    return values
+
+def get_orientation(acc, acc_t, mag, mag_t):
+    if mag_t[0] == 0:
+        log.warning('buffer not ready')
+        return None
+    mag_rate = int((mag_t[-1] - mag_t[0]) / len(mag_t))
+    #print(mag_rate)
+    a = pd.DataFrame(index=pd.to_datetime(acc_t), data={f'acc{i}': v for i, v  in enumerate(acc)})
+    m = pd.DataFrame(index=pd.to_datetime(mag_t), data={f'mag{i}': v for i, v  in enumerate(mag)})
+    df = pd.concat([a, m], sort=True)
+    df = df.resample(f'{mag_rate}N').mean().dropna()
+    #with pd.option_context("display.max_rows", 40):
+    #    print('df', df)
+    points = []
+    for _, row in df.iterrows():
+        gravity = [row.acc0, row.acc1, row.acc2]
+        geomagnetic = [row.mag0, row.mag1, row.mag2]
+        rotation = [0.0] * 9
+        ff_state = getRotationMatrix(rotation, None, gravity, geomagnetic)
+        #assert ff_state == True
+        values = [0.0, 0.0, 0.0]
+        values = getOrientation(rotation, values)
+        points.append(values)
+    points = np.array(points).T
+    points_t = df.index.astype(np.int64)
+    print(points_t[-1], points.shape)
+    return points, points_t

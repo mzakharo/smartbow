@@ -39,7 +39,7 @@ sudo apt install ccache
  # get conda with python 3.8
  sh ./Miniconda3-py38-Linux-x86_64.sh
  conda install -c conda-forge kivy
- conda install cython numpy
+ conda install cython pandas
  pip install -r  requirements.txt
 ```
 

@@ -15,7 +15,7 @@ import datetime
 import threading
 import numpy as np
 from plyer import notification
-from compat import accelerometer, LockScreen, get_application_dir
+from compat import accelerometer, LockScreen, get_application_dir, get_orientation
 from plyer import uniqueid
 
 from influxdb_client import InfluxDBClient, Point, WritePrecision
@@ -139,7 +139,11 @@ class CommonScreen(Screen):
     def notify(self, dt):
         notification.notify(title='>-------->', message=self.message)           
 
-    def detect_event(self, this_time_ns, points, points_t, rate):
+    def detect_event(self, this_time_ns, points, points_t):
+        #just scan recent values
+        points = points[-200:]
+        points_t = points_t[-200:]
+
         self.worker.gen_cache()
         pmax_a = np.abs(points).max(axis=0)
         pmax_i = np.argmax(pmax_a)
@@ -152,6 +156,7 @@ class CommonScreen(Screen):
             Clock.schedule_once(self.notify)
             self.worker.q.put(('event', (self.event_time, pmax)))
             detected = True
+            self.worker.q.put(('acceleration', (self.event_time, self.event_time_idx, points, points_t)))
         else:
             detected = False
 
@@ -183,15 +188,9 @@ class AccelerometerScreen(CommonScreen):
     def get_value(self, dt):
         this_time_ns = time.time_ns()
         with accelerometer.lock:
-            if len(accelerometer.q) != accelerometer.q.maxlen:
-                return
             points = np.array(accelerometer.q).T
             points_t = np.array(accelerometer.tq, dtype=np.int64)
-            rate = accelerometer.acc.rate
-
-        detected = self.detect_event(this_time_ns, points, points_t, rate)
-        if detected:
-            self.worker.q.put(('acceleration', (self.event_time, self.event_time_idx, points, points_t)))
+        detected = self.detect_event(this_time_ns, points, points_t)
 
         self.update_cnt += 1
         if self.update_cnt == GRAPH_DRAW_EVERY_FRAMES or detected:
@@ -203,7 +202,7 @@ class AccelerometerScreen(CommonScreen):
             gr.ymin = max(-ACCELEROMETER_Y_LIMIT, min(int(points.min()-1), gr.ymax-1))
             gr.xmax = points.shape[1]
             gr.y_ticks_major = max(1 , (gr.ymax - gr.ymin) / 5)
-            gr.xlabel = f'Accelerometer {int(rate)} /sec'
+            gr.xlabel = f'Accelerometer {int(accelerometer.acc.rate)} /sec'
             self.px.points = enumerate(points[0])
             self.py.points = enumerate(points[1])
             self.pz.points = enumerate(points[2])
@@ -235,27 +234,29 @@ class OrientationScreen(CommonScreen):
 
     def get_value(self, dt):
         this_time_ns = time.time_ns()
+
         with accelerometer.lock:
-            points = np.array(accelerometer.mag_q).T * 180 / np.pi
-            points_t = np.array(accelerometer.mag_tq, dtype=np.int64)
-            rate = accelerometer.mag.rate
-            if rate == 0:
-                return
             acc_points  = np.array(accelerometer.q).T
             acc_points_t = np.array(accelerometer.tq, dtype=np.int64)
-            acc_rate = accelerometer.acc.rate
+        detected = self.detect_event(this_time_ns, acc_points, acc_points_t )
 
-        detected = self.detect_event(this_time_ns, acc_points, acc_points_t, rate)
+        with accelerometer.mag_lock:
+            mag_points = np.array(accelerometer.mag_q).T * 180 / np.pi
+            mag_points_t = np.array(accelerometer.mag_tq, dtype=np.int64)
+
+        o = get_orientation(acc_points, acc_points_t, mag_points, mag_points_t)
+        if o is None:
+            return
+        points, points_t = o
 
         if detected:
             event_time_idx = np.argmax(points_t >= acc_points_t[self.event_time_idx])
             if event_time_idx == 0: #if we cant match, (acceleration data is fresher than orientation data) assume the last point is closest
                 event_time_idx = len(points_t) - 1
             self.worker.q.put(('orientation', (self.event_time, event_time_idx, points, points_t)))
-            self.worker.q.put(('acceleration', (self.event_time, self.event_time_idx, acc_points, acc_points_t)))
 
         self.update_cnt += 1
-        self.ids.label.text =  f'Count #{self.worker.event_count} | Mag {rate:.1f} | Acc {acc_rate:.1f}'
+        self.ids.label.text =  f'#{self.worker.event_count} | Rate: {accelerometer.mag.rate:.1f}'
 
         if self.update_cnt == GRAPH_DRAW_EVERY_FRAMES or detected: 
             self.update_cnt = 0
