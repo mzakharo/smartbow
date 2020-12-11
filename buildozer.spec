@@ -53,7 +53,7 @@ requirements = python3,kivy==2.0.0,plyer,kivy_garden.graph,numpy,influxdb-client
 #icon.filename = %(source.dir)s/data/icon.png
 
 # (str) Supported orientation (one of landscape, sensorLandscape, portrait or all)
-orientation = landscape
+orientation = all
 
 # (list) List of service to declare
 #services = NAME:ENTRYPOINT_TO_PY,NAME2:ENTRYPOINT2_TO_PY
