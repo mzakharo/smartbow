@@ -85,6 +85,7 @@ class Worker:
         elif cmd in ['orientation', 'acceleration']:
             event_time, event_time_idx, buf, time = val
             points = buf[:3]
+            log.info(f'upload: event time {event_time}, buffer time: {time[event_time_idx]}, idx: {event_time_idx}')
             time -= time[event_time_idx] #center around event time
             time += event_time  #add epoch
             num_points = points.shape[1]
@@ -248,6 +249,8 @@ class OrientationScreen(CommonScreen):
 
         if detected:
             event_time_idx = np.argmax(points_t >= acc_points_t[self.event_time_idx])
+            if event_time_idx == 0: #if we cant match, (acceleration data is fresher than orientation data) assume the last point is closest
+                event_time_idx = len(points_t) - 1
             self.worker.q.put(('orientation', (self.event_time, event_time_idx, points, points_t)))
             self.worker.q.put(('acceleration', (self.event_time, self.event_time_idx, acc_points, acc_points_t)))
 
