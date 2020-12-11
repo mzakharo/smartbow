@@ -267,7 +267,8 @@ class OrientationScreen(CommonScreen):
                 gr = getattr(self.ids, f'graph{i}')
                 values = points[i]
 
-                if detected:
+                zoom = False
+                if detected and zoom:
                     if gr not in self.gr_cache:
                         self.gr_cache[gr] = (gr.ymax, gr.ymin, gr.y_ticks_major)
                         
