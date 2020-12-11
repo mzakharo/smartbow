@@ -62,9 +62,10 @@ if platform == 'android':
             self.rate = default_rate
             self.values = [0.0, 0.0, 0.0]
 
-        def enable(self, q, lock):
+        def enable(self, q, tq, lock):
             self.lock = lock
             self.q = q
+            self.tq = tq
             self.last_time = time.time()
             self.SensorManager.registerListener(
                 self, self.sensor,
@@ -104,12 +105,10 @@ if platform == 'android':
         @java_method('(Landroid/hardware/SensorEvent;)V')
         def onSensorChanged(self, event):
             with self.lock:
-                self.small_q.append(np.array(event.values))
-                tstamp = event.timestamp
-                values = event.values
-                values.append(tstamp)
-                self.q.append(values)
-                self.calc_rate(tstamp)
+                self.small_q.append(event.values)
+                self.q.append(event.values)
+                self.tq.append(event.timestamp)
+                self.calc_rate(event.timestamp)
 
 
 
@@ -139,10 +138,9 @@ if platform == 'android':
                 if ff_state:
                     values = [0, 0, 0]
                     values = self.SensorManager.getOrientation(rotation, values)
-                    tstamp = event.timestamp
-                    values.append(tstamp)
                     self.q.append(values)
-                    self.calc_rate(tstamp)
+                    self.tq.append(event.timestamp)
+                    self.calc_rate(event.timestamp)
 
 
 class Dummy:
@@ -154,9 +152,10 @@ class Dummy:
         self.cnt = 0
 
 
-    def enable(self, q, lock):
+    def enable(self, q, tq, lock):
         self.lock = lock
         self.q = q
+        self.tq = tq
         self.run = True
         do_th = threading.Thread(target=self.do, daemon=True, name=self.type)
         do_th.start()
@@ -185,14 +184,18 @@ class Dummy:
                 data = np.array([random() - 2 , random(), random() + 2 ])
             data = list(data)
             with self.lock:
-                data.append(tstamp)
                 self.q.append(data)
+                self.tq.append(tstamp)
                 self.calc_rate(tstamp)
 
 class Accelerometer:
     def __init__(self):
-        self.q = deque([(0, 0, 0, 0)] * ACCELEROMETER_BUFFER_LEN, maxlen = ACCELEROMETER_BUFFER_LEN)
-        self.mag_q = deque([(0, 0, 0, 0)] * ACCELEROMETER_BUFFER_LEN, maxlen = ACCELEROMETER_BUFFER_LEN)
+        def iq(x, m):
+            return deque( [x] * m, maxlen=m) 
+        self.q = iq((0.0, 0.0, 0.0), ACCELEROMETER_BUFFER_LEN)
+        self.tq = iq(0, ACCELEROMETER_BUFFER_LEN)
+        self.mag_q = iq((0.0, 0.0, 0.0), ORIENTATION_BUFFER_LEN)
+        self.mag_tq = iq(0, ORIENTATION_BUFFER_LEN)
         self.lock = threading.Lock()
         self.mag_lock = threading.Lock()
         self.started = False
@@ -207,8 +210,8 @@ class Accelerometer:
             self.acc = Dummy(DEFAULT_ACCELEROMETER_RATE)
             self.mag = Dummy(DEFAULT_MAGNETOMETER_RATE, type='mag')
 
-        self.acc.enable(self.q, self.lock)
-        self.mag.enable(self.mag_q, self.mag_lock)
+        self.acc.enable(self.q, self.tq, self.lock)
+        self.mag.enable(self.mag_q, self.mag_tq, self.mag_lock)
         self.started = True
 
     def disable(self):

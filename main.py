@@ -79,14 +79,14 @@ class Worker:
         if cmd == 'event':
             time, magnitude = val
             log.info(f"upload: {cmd} {time} {magnitude}")
-            point = Point("event").tag('id', self.id).field('value', magnitude).time(int(time*10**9), WritePrecision.NS)
+            point = Point("event").tag('id', self.id).field('value', magnitude).time(time, WritePrecision.NS)
             if self.write_api is not None:
                 self.write_api.write(self.bucket, self.org, point)
         elif cmd in ['orientation', 'acceleration']:
-            event_time, buf = val
+            event_time, event_time_idx, buf, time = val
             points = buf[:3]
-            time = buf[3]
-            time += int(event_time * 10**9) - time[-1]
+            time -= time[event_time_idx] #center around event time
+            time += event_time  #add epoch
             num_points = points.shape[1]
             send_buffer = []
             for i in range(num_points):
@@ -112,7 +112,6 @@ class Worker:
 
 
 class CommonScreen(Screen):
-    freeze_point = None
     event_time = 0
 
     def on_press(self):
@@ -139,27 +138,23 @@ class CommonScreen(Screen):
     def notify(self, dt):
         notification.notify(title='>-------->', message=self.message)           
 
-    def detect_event(self, this_time, points, rate):
+    def detect_event(self, this_time_ns, points, points_t, rate):
         self.worker.gen_cache()
-        pmax = np.abs(points).max()
-        if pmax > EVENT_THRESH and (this_time - self.event_time) > 4: # 4 sec to handle ringing
+        pmax_a = np.abs(points).max(axis=0)
+        pmax_i = np.argmax(pmax_a)
+        pmax = pmax_a[pmax_i]
+        if pmax > EVENT_THRESH and (this_time_ns - self.event_time) > 4 * 1e9: # 4 sec to handle ringing
             self.worker.register_event()
-            self.event = pmax
-            self.event_time = this_time
-            self.message=f'{datetime.datetime.fromtimestamp(this_time).strftime("%a, %H:%M:%S")}: Count # {self.worker.event_count}'
+            self.event_time = np.int64(this_time_ns)
+            self.event_time_idx = pmax_i
+            self.message=f'{datetime.datetime.fromtimestamp(this_time_ns / 1e9).strftime("%a, %H:%M:%S")}: Count # {self.worker.event_count}'
             Clock.schedule_once(self.notify)
-            self.worker.q.put(('event', (self.event_time, self.event)))
-            self.freeze_point = this_time + ((points.shape[1] / rate * POST_EVENT_CAPTURE) if rate != 0 else 0)
+            self.worker.q.put(('event', (self.event_time, pmax)))
             detected = True
         else:
             detected = False
 
-        if self.freeze_point is not None and this_time >= self.freeze_point:
-            force_update = True
-            self.freeze_point = None
-        else:
-            force_update = False
-        return detected, force_update
+        return detected
 
 
 class AccelerometerScreen(CommonScreen):
@@ -185,22 +180,26 @@ class AccelerometerScreen(CommonScreen):
         self.update_cnt = 0
 
     def get_value(self, dt):
-        this_time = time.time()
+        this_time_ns = time.time_ns()
         with accelerometer.lock:
-            acc_points = np.array(accelerometer.q).T
-            points = acc_points[:3]
+            if len(accelerometer.q) != accelerometer.q.maxlen:
+                return
+            points = np.array(accelerometer.q).T
+            points_t = np.array(accelerometer.tq, dtype=np.int64)
             rate = accelerometer.acc.rate
-        detected, force_update = self.detect_event(this_time, points, rate)
+
+        detected = self.detect_event(this_time_ns, points, points_t, rate)
+        if detected:
+            self.worker.q.put(('acceleration', (self.event_time, self.event_time_idx, points, points_t)))
 
         self.update_cnt += 1
-        if self.update_cnt == GRAPH_RATE or force_update: 
+        if self.update_cnt == GRAPH_DRAW_EVERY_FRAMES or detected:
             self.update_cnt = 0
-            if force_update:
+            if detected:
                 self.update_cnt = -int(GRAPH_FREEZE / POLL_RATE) #freeze graph after event
-                self.worker.q.put(('acceleration', (self.event_time, acc_points)))
             gr = self.ids.graph
-            gr.ymax = min(GRAPH_Y_LIMIT, max(1, int(points.max() + 1)))
-            gr.ymin = max(-GRAPH_Y_LIMIT, min(int(points.min()-1), gr.ymax-1))
+            gr.ymax = min(ACCELEROMETER_Y_LIMIT, max(1, int(points.max() + 1)))
+            gr.ymin = max(-ACCELEROMETER_Y_LIMIT, min(int(points.min()-1), gr.ymax-1))
             gr.xmax = points.shape[1]
             gr.y_ticks_major = max(1 , (gr.ymax - gr.ymin) / 5)
             gr.xlabel = f'Accelerometer {int(rate)} /sec'
@@ -234,40 +233,51 @@ class OrientationScreen(CommonScreen):
         self.update_cnt = 0
 
     def get_value(self, dt):
-        this_time = time.time()
+        this_time_ns = time.time_ns()
         with accelerometer.lock:
-            orientation = np.array(accelerometer.mag_q).T * 180 / np.pi
+            points = np.array(accelerometer.mag_q).T * 180 / np.pi
+            points_t = np.array(accelerometer.mag_tq, dtype=np.int64)
             rate = accelerometer.mag.rate
-            points  = orientation[:3]
+            if rate == 0:
+                return
             acc_points  = np.array(accelerometer.q).T
-            acc_points = acc_points[:3]
+            acc_points_t = np.array(accelerometer.tq, dtype=np.int64)
             acc_rate = accelerometer.acc.rate
 
-        detected, force_update = self.detect_event(this_time, acc_points, rate)
+        detected = self.detect_event(this_time_ns, acc_points, acc_points_t, rate)
+
         if detected:
-            fro = -int(accelerometer.mag.rate)
-            to =  -int(accelerometer.mag.rate/4)
-            self.midpoint = np.median(points[:, fro:to], axis=-1)
+            event_time_idx = np.argmax(points_t >= acc_points_t[self.event_time_idx])
+            self.worker.q.put(('orientation', (self.event_time, event_time_idx, points, points_t)))
+            self.worker.q.put(('acceleration', (self.event_time, self.event_time_idx, acc_points, acc_points_t)))
 
         self.update_cnt += 1
         self.ids.label.text =  f'Count #{self.worker.event_count} | Mag {rate:.1f} | Acc {acc_rate:.1f}'
-        #slow down graph update to lower cpu usage
-        if self.update_cnt == GRAPH_RATE or force_update: 
+
+        if self.update_cnt == GRAPH_DRAW_EVERY_FRAMES or detected: 
             self.update_cnt = 0
-            if force_update:
+
+            if detected:
                 self.update_cnt = -int(GRAPH_FREEZE / POLL_RATE) #freeze graph after event
-                self.worker.q.put(('orientation', (self.event_time, orientation)))
-                #self.worker.q.put(('acceleration', (self.event_time, rate, acc_points)))
+
+                #center graphs
+                fro = -int(accelerometer.mag.rate)
+                to =  -int(accelerometer.mag.rate/4)
+                midpoints = np.median(points[:, fro:to], axis=-1)
 
             for i, plot in enumerate(self.plots):
                 gr = getattr(self.ids, f'graph{i}')
                 values = points[i]
-                if force_update:
+
+                if detected:
                     if gr not in self.gr_cache:
                         self.gr_cache[gr] = (gr.ymax, gr.ymin, gr.y_ticks_major)
-                    midpoint = int(np.round(self.midpoint[i]))
+                        
+                    #center graphs
+                    midpoint = int(np.round(midpoints[i]))
+
                     ZOOM_DEGREES = 20
-                    if i == 0:  #Azimuth has more noise?
+                    if i == 0:  #FIXME: remove Azimuth outliers?
                         ZOOM_DEGREES += ZOOM_DEGREES 
                     gr.ymax = midpoint + ZOOM_DEGREES
                     gr.ymin = midpoint - ZOOM_DEGREES
