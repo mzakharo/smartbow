@@ -15,7 +15,7 @@ import datetime
 import threading
 import numpy as np
 from plyer import notification
-from compat import accelerometer, LockScreen, get_application_dir
+from compat import sensor_manager, LockScreen, get_application_dir
 from plyer import uniqueid
 
 from influxdb_client import InfluxDBClient, Point, WritePrecision
@@ -139,7 +139,7 @@ class CommonScreen(Screen):
     def notify(self, dt):
         notification.notify(title='>-------->', message=self.message)           
 
-    def detect_event(self, this_time_ns, points, points_t, rate):
+    def detect_event(self, this_time_ns, points, points_t):
         self.worker.gen_cache()
         pmax_a = np.abs(points).max(axis=0)
         pmax_i = np.argmax(pmax_a)
@@ -182,14 +182,12 @@ class AccelerometerScreen(CommonScreen):
 
     def get_value(self, dt):
         this_time_ns = time.time_ns()
-        with accelerometer.lock:
-            if len(accelerometer.q) != accelerometer.q.maxlen:
-                return
-            points = np.array(accelerometer.q).T
-            points_t = np.array(accelerometer.tq, dtype=np.int64)
-            rate = accelerometer.acc.rate
+        with sensor_manager.acc.lock:
+            points = np.array(sensor_manager.acc.q).T
+            points_t = np.array(sensor_manager.acc.tq, dtype=np.int64)
+        rate = sensor_manager.acc.rate
 
-        detected = self.detect_event(this_time_ns, points, points_t, rate)
+        detected = self.detect_event(this_time_ns, points, points_t)
         if detected:
             self.worker.q.put(('acceleration', (self.event_time, self.event_time_idx, points, points_t)))
 
@@ -235,17 +233,14 @@ class OrientationScreen(CommonScreen):
 
     def get_value(self, dt):
         this_time_ns = time.time_ns()
-        with accelerometer.lock:
-            points = np.array(accelerometer.mag_q).T * 180 / np.pi
-            points_t = np.array(accelerometer.mag_tq, dtype=np.int64)
-            rate = accelerometer.mag.rate
-            if rate == 0:
-                return
-            acc_points  = np.array(accelerometer.q).T
-            acc_points_t = np.array(accelerometer.tq, dtype=np.int64)
-            acc_rate = accelerometer.acc.rate
+        with sensor_manager.acc.lock:
+            acc_points  = np.array(sensor_manager.acc.q).T
+            acc_points_t = np.array(sensor_manager.acc.tq, dtype=np.int64)
+        detected = self.detect_event(this_time_ns, acc_points, acc_points_t)
 
-        detected = self.detect_event(this_time_ns, acc_points, acc_points_t, rate)
+        with sensor_manager.mag.lock:
+            points = np.array(sensor_manager.mag.q).T * 180 / np.pi
+            points_t = np.array(sensor_manager.mag.tq, dtype=np.int64)
 
         if detected:
             event_time_idx = np.argmax(points_t >= acc_points_t[self.event_time_idx])
@@ -255,7 +250,7 @@ class OrientationScreen(CommonScreen):
             self.worker.q.put(('acceleration', (self.event_time, self.event_time_idx, acc_points, acc_points_t)))
 
         self.update_cnt += 1
-        self.ids.label.text =  f'Count #{self.worker.event_count} | Mag {rate:.1f} | Acc {acc_rate:.1f}'
+        self.ids.label.text =  f'Cnt #{self.worker.event_count} Rate: {sensor_manager.mag.rate:.1f} '
 
         if self.update_cnt == GRAPH_DRAW_EVERY_FRAMES or detected: 
             self.update_cnt = 0
@@ -264,8 +259,8 @@ class OrientationScreen(CommonScreen):
                 self.update_cnt = -int(GRAPH_FREEZE / POLL_RATE) #freeze graph after event
 
                 #center graphs
-                fro = -int(accelerometer.mag.rate)
-                to =  -int(accelerometer.mag.rate/4)
+                fro = -int(sensor_manager.mag.rate)
+                to =  -int(sensor_manager.mag.rate/4)
                 midpoints = np.median(points[:, fro:to], axis=-1)
 
             for i, plot in enumerate(self.plots):
@@ -320,21 +315,21 @@ class SmartBow(App):
 
     def on_resume(self):
         self.lockscreen.set()
-        accelerometer.enable()
+        sensor_manager.enable()
         return True
 
     def on_pause(self):
         self.lockscreen.unset()
-        accelerometer.disable()
+        sensor_manager.disable()
         return True
 
     def on_start(self):
         self.lockscreen = LockScreen()
         self.lockscreen.set()
-        accelerometer.enable()
+        sensor_manager.enable()
 
     def on_stop(self):
-        accelerometer.disable()
+        sensor_manager.disable()
         return True
 
 if __name__ == "__main__":

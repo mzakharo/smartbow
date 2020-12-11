@@ -6,6 +6,7 @@ from collections import deque
 from random import random
 from statistics import mean
 import numpy as np
+from kivy.logger import Logger as log
 
 from config import *
 
@@ -43,6 +44,7 @@ class LockScreen():
             return
         self.window.clearFlags(self.params.FLAG_KEEP_SCREEN_ON)
 
+iq = lambda x, m: deque([x] * m, maxlen=m)
 
 if platform == 'android':
     from jnius import PythonJavaClass, java_method, autoclass, cast
@@ -56,17 +58,16 @@ if platform == 'android':
     class SensorListener(PythonJavaClass):
         __javainterfaces__ = ['android/hardware/SensorEventListener']
 
-        def __init__(self, default_rate):
+        def __init__(self, default_rate, buffer_len):
             super().__init__()
             self.cnt = 0
+            self.lock = threading.Lock()
             self.rate = default_rate
-            self.values = [0.0, 0.0, 0.0]
+            self.q = iq((0.0, 0.0, 0.0), buffer_len)
+            self.tq = iq(0, buffer_len)
+            self.last_time = 0
 
-        def enable(self, q, tq, lock):
-            self.lock = lock
-            self.q = q
-            self.tq = tq
-            self.last_time = time.time()
+        def enable(self):
             self.SensorManager.registerListener(
                 self, self.sensor,
                 SensorManager.SENSOR_DELAY_FASTEST
@@ -86,14 +87,13 @@ if platform == 'android':
 
         @java_method('(Landroid/hardware/Sensor;I)V')
         def onAccuracyChanged(self, sensor, accuracy):
-            # Maybe, do something in future?
-            pass
+            log.info(f"onAccuracyChanged {sensor} {accuracy}")
 
     class AccelerometerSensorListener(SensorListener):
         def __init__(self):
-            super().__init__(default_rate=DEFAULT_ACCELEROMETER_RATE)
+            super().__init__(default_rate=DEFAULT_ACCELEROMETER_RATE, buffer_len = ACCELEROMETER_BUFFER_LEN)
             self.name = 'acc'
-            self.small_q = deque(maxlen=30) #hold accelerometer buffer for orientation (accelerometer is 5x sampling rate than magnetometer)
+            self.small_q = deque([0,0,0] * SENSOR_RATIO, maxlen=SENSOR_RATIO)
             self.SensorManager = cast(
                 'android.hardware.SensorManager',
                 activity.getSystemService(Context.SENSOR_SERVICE)
@@ -108,13 +108,13 @@ if platform == 'android':
                 self.small_q.append(event.values)
                 self.q.append(event.values)
                 self.tq.append(event.timestamp)
-                self.calc_rate(event.timestamp)
+            self.calc_rate(event.timestamp)
 
 
 
     class MagnetometerSensorListener(SensorListener):
         def __init__(self, acc):
-            super().__init__(default_rate=DEFAULT_MAGNETOMETER_RATE)
+            super().__init__(default_rate=DEFAULT_MAGNETOMETER_RATE, buffer_len = ORIENTATION_BUFFER_LEN)
             self.name = 'spat'
             self.acc = acc
             service = activity.getSystemService(Context.SENSOR_SERVICE)
@@ -125,13 +125,10 @@ if platform == 'android':
         @java_method('(Landroid/hardware/SensorEvent;)V')
         def onSensorChanged(self, event):
             with self.lock:
-                aq = self.acc.small_q
-                n = len(aq)
-                if n == 0:
-                    return
-                acc_values = np.array([aq.popleft() for _ in range(n)])
-                gravity = list(np.median(acc_values, axis=0))
+                with self.acc.lock:
+                    acc_values = np.array(self.acc.small_q)
                 #gravity = self.acc.values
+                gravity = list(np.mean(acc_values, axis=0))
                 geomagnetic = event.values
                 rotation = [0] * 9
                 ff_state = self.SensorManager.getRotationMatrix(rotation, None, gravity, geomagnetic)
@@ -144,18 +141,17 @@ if platform == 'android':
 
 
 class Dummy:
-    def __init__(self, _rate, type='acc'):
-        self.rate = 0
+    def __init__(self, _rate, type='acc', buffer_len=1):
+        self.rate = _rate
         self._rate = _rate
         self.type = type
         self.last_time = time.monotonic_ns()
+        self.q = iq((0.0, 0.0, 0.0), buffer_len)
+        self.tq = iq(0, buffer_len)
         self.cnt = 0
+        self.lock = threading.Lock()
 
-
-    def enable(self, q, tq, lock):
-        self.lock = lock
-        self.q = q
-        self.tq = tq
+    def enable(self):
         self.run = True
         do_th = threading.Thread(target=self.do, daemon=True, name=self.type)
         do_th.start()
@@ -190,14 +186,6 @@ class Dummy:
 
 class Accelerometer:
     def __init__(self):
-        def iq(x, m):
-            return deque( [x] * m, maxlen=m) 
-        self.q = iq((0.0, 0.0, 0.0), ACCELEROMETER_BUFFER_LEN)
-        self.tq = iq(0, ACCELEROMETER_BUFFER_LEN)
-        self.mag_q = iq((0.0, 0.0, 0.0), ORIENTATION_BUFFER_LEN)
-        self.mag_tq = iq(0, ORIENTATION_BUFFER_LEN)
-        self.lock = threading.Lock()
-        self.mag_lock = threading.Lock()
         self.started = False
 
     def enable(self):
@@ -207,11 +195,11 @@ class Accelerometer:
             self.acc = AccelerometerSensorListener()
             self.mag = MagnetometerSensorListener(self.acc)
         else:
-            self.acc = Dummy(DEFAULT_ACCELEROMETER_RATE)
-            self.mag = Dummy(DEFAULT_MAGNETOMETER_RATE, type='mag')
+            self.acc = Dummy(DEFAULT_ACCELEROMETER_RATE, buffer_len = ACCELEROMETER_BUFFER_LEN)
+            self.mag = Dummy(DEFAULT_MAGNETOMETER_RATE, type='mag', buffer_len=ORIENTATION_BUFFER_LEN)
 
-        self.acc.enable(self.q, self.tq, self.lock)
-        self.mag.enable(self.mag_q, self.mag_tq, self.mag_lock)
+        self.acc.enable()
+        self.mag.enable()
         self.started = True
 
     def disable(self):
@@ -223,7 +211,7 @@ class Accelerometer:
 
     
 
-accelerometer = Accelerometer()
+sensor_manager = Accelerometer()
 
 def get_application_dir():
     if platform == 'android':
