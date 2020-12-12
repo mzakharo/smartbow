@@ -7,6 +7,7 @@ from random import random
 from statistics import mean
 import numpy as np
 from kivy.logger import Logger as log
+from copy import deepcopy
 
 from config import *
 
@@ -53,6 +54,8 @@ if platform == 'android':
     Context = autoclass('android.content.Context')
     Sensor = autoclass('android.hardware.Sensor')
     SensorManager = autoclass('android.hardware.SensorManager')
+    AXIS_X = SensorManager.AXIS_X
+    AXIS_Z = SensorManager.AXIS_Z
 
 
     class SensorListener(PythonJavaClass):
@@ -119,18 +122,25 @@ if platform == 'android':
             self.SensorManager = cast('android.hardware.SensorManager', service)
             self.sensor = self.SensorManager.getDefaultSensor(
                 Sensor.TYPE_ROTATION_VECTOR)
+            self.rotation = [0.0] * 9
+            self.remapped_rotation = deepcopy(self.rotation)
+            self.values = [0.0] * 3
         @java_method('(Landroid/hardware/SensorEvent;)V')
         def onSensorChanged(self, event):
-            #log.info(f'accuracy: {event.accuracy} values: {event.values}')
-            self.accuracy = event.accuracy
-            rotation = [0] * 9
-            self.SensorManager.getRotationMatrixFromVector(rotation, event.values);
-            values = [0] * 3
-            values = self.SensorManager.getOrientation(rotation, values)
+            self.SensorManager.getRotationMatrixFromVector(self.rotation, event.values);
+            #from https://developer.android.com/reference/android/hardware/SensorManager#remapCoordinateSystem(float[],%20int,%20int,%20float[]) 
+            #Using the camera (Y axis along the camera's axis) for an augmented reality application where the rotation angles are needed:
+            SensorManager.remapCoordinateSystem(self.rotation, AXIS_X, AXIS_Z, self.remapped_rotation)
+
+            values = deepcopy(self.values)
+            self.SensorManager.getOrientation(self.remapped_rotation, values)
             with self.lock:
                 self.q.append(values)
                 self.tq.append(event.timestamp)
+
             self.calc_rate(event.timestamp)
+            self.accuracy = event.accuracy
+            #log.info(f'accuracy: {event.accuracy} values: {event.values}')
 
 class Dummy:
     def __init__(self, _rate, type='acc', buffer_len=1):
