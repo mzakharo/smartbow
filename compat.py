@@ -146,6 +146,7 @@ class Dummy:
     def __init__(self, _rate, type='acc', buffer_len=1):
         self.rate = _rate
         self._rate = _rate
+        self.accuracy = 3
         self.type = type
         self.last_time = time.monotonic_ns()
         self.q = iq((0.0, 0.0, 0.0), buffer_len)

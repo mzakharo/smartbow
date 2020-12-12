@@ -252,7 +252,8 @@ class OrientationScreen(CommonScreen):
             self.worker.q.put(('orientation', (self.event_time, event_time_idx, points, points_t)))
 
         self.update_cnt += 1
-        self.ids.label.text =  f'Cnt #{self.worker.event_count} Rate{snsr.accuracy}: {snsr.rate:.1f} '
+        lookup = {3:'H', 2: 'M', 1:'L'}
+        self.ids.label.text =  f'#{self.worker.event_count} | rate:{snsr.rate:.1f}@{lookup.get(snsr.accuracy,"?")}'
 
         if self.update_cnt == GRAPH_DRAW_EVERY_FRAMES or detected: 
             self.update_cnt = 0
@@ -265,6 +266,8 @@ class OrientationScreen(CommonScreen):
                 to =  -int(sensor_manager.ori.rate/4)
                 midpoints = np.median(points[:, fro:to], axis=-1)
 
+            labels = ['Azimuth', 'Pitch', 'Roll']
+
             for i, plot in enumerate(self.plots):
                 gr = getattr(self.ids, f'graph{i}')
                 values = points[i]
@@ -276,6 +279,7 @@ class OrientationScreen(CommonScreen):
                         
                     #center graphs
                     midpoint = int(np.round(midpoints[i]))
+                    gr.xlabel = f'{labels[i]} @ {midpoint}'
                     ZOOM_DEGREES = 20
                     gr.ymax = midpoint + ZOOM_DEGREES
                     gr.ymin = midpoint - ZOOM_DEGREES
@@ -284,6 +288,7 @@ class OrientationScreen(CommonScreen):
                     cache = self.gr_cache.pop(gr, None)
                     if cache is not None:
                         gr.ymax, gr.ymin, gr.y_ticks_major = cache
+                    gr.xlabel = f'{labels[i]} @ {np.median(values[-10:]):.1f}'
 
                 gr.xmax = len(values)
                 plot.points = enumerate(values)
