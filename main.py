@@ -151,6 +151,7 @@ class CommonScreen(Screen):
             self.message=f'{datetime.datetime.fromtimestamp(this_time_ns / 1e9).strftime("%a, %H:%M:%S")}: Count # {self.worker.event_count}'
             Clock.schedule_once(self.notify)
             self.worker.q.put(('event', (self.event_time, pmax)))
+            self.worker.q.put(('acceleration', (self.event_time, self.event_time_idx, points, points_t)))
             detected = True
         else:
             detected = False
@@ -182,14 +183,12 @@ class AccelerometerScreen(CommonScreen):
 
     def get_value(self, dt):
         this_time_ns = time.time_ns()
-        with sensor_manager.acc.lock:
-            points = np.array(sensor_manager.acc.q).T
-            points_t = np.array(sensor_manager.acc.tq, dtype=np.int64)
-        rate = sensor_manager.acc.rate
 
+        snsr = sensor_manager.acc
+        with snsr.lock:
+            points = np.array(snsr.q).T
+            points_t = np.array(snsr.tq, dtype=np.int64)
         detected = self.detect_event(this_time_ns, points, points_t)
-        if detected:
-            self.worker.q.put(('acceleration', (self.event_time, self.event_time_idx, points, points_t)))
 
         self.update_cnt += 1
         if self.update_cnt == GRAPH_DRAW_EVERY_FRAMES or detected:
@@ -201,7 +200,7 @@ class AccelerometerScreen(CommonScreen):
             gr.ymin = max(-ACCELEROMETER_Y_LIMIT, min(int(points.min()-1), gr.ymax-1))
             gr.xmax = points.shape[1]
             gr.y_ticks_major = max(1 , (gr.ymax - gr.ymin) / 5)
-            gr.xlabel = f'Accelerometer {int(rate)} /sec'
+            gr.xlabel = f'Accelerometer {int(snsr.rate)}/sec. Accuracy: {snsr.accuracy}'
             self.px.points = enumerate(points[0])
             self.py.points = enumerate(points[1])
             self.pz.points = enumerate(points[2])
@@ -233,24 +232,27 @@ class OrientationScreen(CommonScreen):
 
     def get_value(self, dt):
         this_time_ns = time.time_ns()
-        with sensor_manager.acc.lock:
-            acc_points  = np.array(sensor_manager.acc.q).T
-            acc_points_t = np.array(sensor_manager.acc.tq, dtype=np.int64)
+
+        snsr = sensor_manager.acc
+        with snsr.lock:
+            acc_points  = np.array(snsr.q).T
+            acc_points_t = np.array(snsr.tq, dtype=np.int64)
+
         detected = self.detect_event(this_time_ns, acc_points, acc_points_t)
 
-        with sensor_manager.mag.lock:
-            points = np.array(sensor_manager.mag.q).T * 180 / np.pi
-            points_t = np.array(sensor_manager.mag.tq, dtype=np.int64)
+        snsr = sensor_manager.ori
+        with snsr.lock:
+            points = np.degrees(np.array(snsr.q).T)
+            points_t = np.array(snsr.tq, dtype=np.int64)
 
         if detected:
             event_time_idx = np.argmax(points_t >= acc_points_t[self.event_time_idx])
             if event_time_idx == 0: #if we cant match, (acceleration data is fresher than orientation data) assume the last point is closest
                 event_time_idx = len(points_t) - 1
             self.worker.q.put(('orientation', (self.event_time, event_time_idx, points, points_t)))
-            self.worker.q.put(('acceleration', (self.event_time, self.event_time_idx, acc_points, acc_points_t)))
 
         self.update_cnt += 1
-        self.ids.label.text =  f'Cnt #{self.worker.event_count} Rate: {sensor_manager.mag.rate:.1f} '
+        self.ids.label.text =  f'Cnt #{self.worker.event_count} Rate{snsr.accuracy}: {snsr.rate:.1f} '
 
         if self.update_cnt == GRAPH_DRAW_EVERY_FRAMES or detected: 
             self.update_cnt = 0
@@ -259,25 +261,22 @@ class OrientationScreen(CommonScreen):
                 self.update_cnt = -int(GRAPH_FREEZE / POLL_RATE) #freeze graph after event
 
                 #center graphs
-                fro = -int(sensor_manager.mag.rate)
-                to =  -int(sensor_manager.mag.rate/4)
+                fro = -int(sensor_manager.ori.rate)
+                to =  -int(sensor_manager.ori.rate/4)
                 midpoints = np.median(points[:, fro:to], axis=-1)
 
             for i, plot in enumerate(self.plots):
                 gr = getattr(self.ids, f'graph{i}')
                 values = points[i]
 
-                zoom = False
+                zoom = True
                 if detected and zoom:
                     if gr not in self.gr_cache:
                         self.gr_cache[gr] = (gr.ymax, gr.ymin, gr.y_ticks_major)
                         
                     #center graphs
                     midpoint = int(np.round(midpoints[i]))
-
                     ZOOM_DEGREES = 20
-                    if i == 0:  #FIXME: remove Azimuth outliers?
-                        ZOOM_DEGREES += ZOOM_DEGREES 
                     gr.ymax = midpoint + ZOOM_DEGREES
                     gr.ymin = midpoint - ZOOM_DEGREES
                     gr.y_ticks_major = int((gr.ymax - gr.ymin) / 10)

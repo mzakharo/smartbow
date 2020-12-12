@@ -57,6 +57,7 @@ if platform == 'android':
 
     class SensorListener(PythonJavaClass):
         __javainterfaces__ = ['android/hardware/SensorEventListener']
+        accuracy = 3
 
         def __init__(self, default_rate, buffer_len):
             super().__init__()
@@ -76,7 +77,6 @@ if platform == 'android':
         def disable(self):
             self.SensorManager.unregisterListener(self, self.sensor)
 
-
         def calc_rate(self, tstamp):
             self.cnt += 1
             diff = tstamp - self.last_time 
@@ -93,7 +93,6 @@ if platform == 'android':
         def __init__(self):
             super().__init__(default_rate=DEFAULT_ACCELEROMETER_RATE, buffer_len = ACCELEROMETER_BUFFER_LEN)
             self.name = 'acc'
-            self.small_q = deque([0,0,0] * SENSOR_RATIO, maxlen=SENSOR_RATIO)
             self.SensorManager = cast(
                 'android.hardware.SensorManager',
                 activity.getSystemService(Context.SENSOR_SERVICE)
@@ -104,41 +103,34 @@ if platform == 'android':
 
         @java_method('(Landroid/hardware/SensorEvent;)V')
         def onSensorChanged(self, event):
+            self.accuracy = event.accuracy
             with self.lock:
-                self.small_q.append(event.values)
                 self.q.append(event.values)
                 self.tq.append(event.timestamp)
             self.calc_rate(event.timestamp)
 
 
 
-    class MagnetometerSensorListener(SensorListener):
-        def __init__(self, acc):
-            super().__init__(default_rate=DEFAULT_MAGNETOMETER_RATE, buffer_len = ORIENTATION_BUFFER_LEN)
-            self.name = 'spat'
-            self.acc = acc
+    class OrientationSensorListener(SensorListener):
+        def __init__(self):
+            super().__init__(default_rate=DEFAULT_ORIENTATION_RATE, buffer_len = ORIENTATION_BUFFER_LEN)
+            self.name = 'ori'
             service = activity.getSystemService(Context.SENSOR_SERVICE)
             self.SensorManager = cast('android.hardware.SensorManager', service)
             self.sensor = self.SensorManager.getDefaultSensor(
-                Sensor.TYPE_MAGNETIC_FIELD)
-
+                Sensor.TYPE_ROTATION_VECTOR)
         @java_method('(Landroid/hardware/SensorEvent;)V')
         def onSensorChanged(self, event):
+            #log.info(f'accuracy: {event.accuracy} values: {event.values}')
+            self.accuracy = event.accuracy
+            rotation = [0] * 9
+            self.SensorManager.getRotationMatrixFromVector(rotation, event.values);
+            values = [0] * 3
+            values = self.SensorManager.getOrientation(rotation, values)
             with self.lock:
-                with self.acc.lock:
-                    acc_values = np.array(self.acc.small_q)
-                #gravity = self.acc.values
-                gravity = list(np.mean(acc_values, axis=0))
-                geomagnetic = event.values
-                rotation = [0] * 9
-                ff_state = self.SensorManager.getRotationMatrix(rotation, None, gravity, geomagnetic)
-                if ff_state:
-                    values = [0, 0, 0]
-                    values = self.SensorManager.getOrientation(rotation, values)
-                    self.q.append(values)
-                    self.tq.append(event.timestamp)
-                    self.calc_rate(event.timestamp)
-
+                self.q.append(values)
+                self.tq.append(event.timestamp)
+            self.calc_rate(event.timestamp)
 
 class Dummy:
     def __init__(self, _rate, type='acc', buffer_len=1):
@@ -171,7 +163,7 @@ class Dummy:
         while self.run:
             time.sleep(1/self._rate)
             tstamp = time.monotonic_ns()
-            if self.type == 'mag':
+            if self.type == 'ori':
                 azimuth = np.random.uniform(-np.pi, np.pi)
                 pitch = np.random.uniform(-np.pi/4, np.pi/4)
                 roll = np.random.uniform(-np.pi, 0)
@@ -182,7 +174,7 @@ class Dummy:
             with self.lock:
                 self.q.append(data)
                 self.tq.append(tstamp)
-                self.calc_rate(tstamp)
+            self.calc_rate(tstamp)
 
 class Accelerometer:
     def __init__(self):
@@ -193,20 +185,20 @@ class Accelerometer:
             return
         if platform == 'android':
             self.acc = AccelerometerSensorListener()
-            self.mag = MagnetometerSensorListener(self.acc)
+            self.ori = OrientationSensorListener()
         else:
             self.acc = Dummy(DEFAULT_ACCELEROMETER_RATE, buffer_len = ACCELEROMETER_BUFFER_LEN)
-            self.mag = Dummy(DEFAULT_MAGNETOMETER_RATE, type='mag', buffer_len=ORIENTATION_BUFFER_LEN)
+            self.ori= Dummy(DEFAULT_ORIENTATION_RATE, type='ori', buffer_len=ORIENTATION_BUFFER_LEN)
 
         self.acc.enable()
-        self.mag.enable()
+        self.ori.enable()
         self.started = True
 
     def disable(self):
         if not self.started:
             return
         self.acc.disable()
-        self.mag.disable()
+        self.ori.disable()
         self.started = False
 
     
