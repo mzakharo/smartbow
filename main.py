@@ -59,6 +59,7 @@ class Worker:
             self.write_api = None
         self.id = uniqueid.id
         self.q = Queue()
+        self.send_buffer = []
         do_th = threading.Thread(target=self.do, daemon=True)
         do_th.start()
 
@@ -77,11 +78,11 @@ class Worker:
     def process(self):
         cmd, val = self.q.get()
         if cmd == 'event':
-            time, magnitude = val
-            log.info(f"upload: {cmd} {time} {magnitude}")
-            point = Point("event").tag('id', self.id).field('value', magnitude).time(time, WritePrecision.NS)
-            if self.write_api is not None:
-                self.write_api.write(self.bucket, self.org, point)
+            time, d = val
+            log.info(f'process: {cmd} {time} {d}')
+            for field, value in d.items():
+                point = Point(cmd).tag('id', self.id).field(field, value).time(time, WritePrecision.NS)
+                self.send_buffer.append(point)
         elif cmd in ['orientation', 'acceleration']:
             event_time, event_time_idx, buf, time = val
             points = buf[:3]
@@ -89,19 +90,19 @@ class Worker:
             time -= time[event_time_idx] #center around event time
             time += event_time  #add epoch
             num_points = points.shape[1]
-            send_buffer = []
             for i in range(num_points):
                 values = points[:, i]
                 for idx, value in enumerate(values):
                     point = Point(cmd).tag('id', self.id).tag('idx', idx).field('value', value).time(time[i], WritePrecision.NS)
-                    send_buffer.append(point)
-            log.info(f'upload: {cmd},  {len(send_buffer)}')
+                    self.send_buffer.append(point)
+        elif cmd == 'flush':
             if self.write_api is not None:
-                self.write_api.write(self.bucket, self.org, send_buffer)
-
-
+                log.info(f'upload: {len(self.send_buffer)}')
+                self.write_api.write(self.bucket, self.org, self.send_buffer)
+            self.send_buffer = []
         else:
             raise Exception("unknown cmd", cmd)
+
 
     def do(self):
         while True:
@@ -150,7 +151,7 @@ class CommonScreen(Screen):
             self.event_time_idx = pmax_i
             self.message=f'{datetime.datetime.fromtimestamp(this_time_ns / 1e9).strftime("%a, %H:%M:%S")}: Count # {self.worker.event_count}'
             Clock.schedule_once(self.notify)
-            self.worker.q.put(('event', (self.event_time, pmax)))
+            self.worker.q.put(('event', (self.event_time, dict(value=pmax))))
             self.worker.q.put(('acceleration', (self.event_time, self.event_time_idx, points, points_t)))
             detected = True
         else:
@@ -189,6 +190,8 @@ class AccelerometerScreen(CommonScreen):
             points = np.array(snsr.q).T
             points_t = np.array(snsr.tq, dtype=np.int64)
         detected = self.detect_event(this_time_ns, points, points_t)
+        if detected:
+            self.worker.q.put(('flush',None))
 
         self.update_cnt += 1
         if self.update_cnt == GRAPH_DRAW_EVERY_FRAMES or detected:
@@ -219,6 +222,7 @@ class OrientationScreen(CommonScreen):
         self.first_run = True
         self.enabled = False
         self.gr_cache = {}
+        self.labels = ['Azimuth', 'Pitch', 'Roll']
 
     def start(self):
         log.info(f'{self.name}: start')
@@ -249,7 +253,12 @@ class OrientationScreen(CommonScreen):
             event_time_idx = np.argmax(points_t >= acc_points_t[self.event_time_idx])
             if event_time_idx == 0: #if we cant match, (acceleration data is fresher than orientation data) assume the last point is closest
                 event_time_idx = len(points_t) - 1
+            else:
+                event_time_idx -= 1 # remove one sample, in case it is contaminated with shot
+            event = {self.labels[i] : v for i, v in enumerate(points[:, event_time_idx])}
+            self.worker.q.put(('event', (self.event_time, event)))
             self.worker.q.put(('orientation', (self.event_time, event_time_idx, points, points_t)))
+            self.worker.q.put(('flush',None))
 
         self.update_cnt += 1
         lookup = {3:'H', 2: 'M', 1:'L'}
@@ -266,12 +275,24 @@ class OrientationScreen(CommonScreen):
                 to =  -int(sensor_manager.ori.rate/4)
                 midpoints = np.median(points[:, fro:to], axis=-1)
 
-            labels = ['Azimuth', 'Pitch', 'Roll']
 
+            mins = [8, 2, 2]
+            
             for i, plot in enumerate(self.plots):
                 gr = getattr(self.ids, f'graph{i}')
                 values = points[i]
 
+                idx = -1 if not detected else  event_time_idx
+                midpoint = values[idx]
+                high = np.max(values)
+                low = np.min(values)
+
+                span = max(max((high - midpoint), (midpoint - low)), mins[i])
+                gr.ymax = int(midpoint + span)
+                gr.ymin = int(midpoint - span)
+                gr.y_ticks_major = (gr.ymax - gr.ymin) / 5
+
+                '''
                 zoom = True
                 if detected and zoom:
                     if gr not in self.gr_cache:
@@ -279,7 +300,7 @@ class OrientationScreen(CommonScreen):
                         
                     #center graphs
                     midpoint = midpoints[i]
-                    gr.xlabel = f'{labels[i]} @ {midpoint:.1f}'
+                    gr.xlabel = f'{self.labels[i]} @ {midpoint:.1f}'
                     midpoint = int(np.round(midpoint))
                     ZOOM_DEGREES = 20
                     gr.ymax = midpoint + ZOOM_DEGREES
@@ -289,8 +310,10 @@ class OrientationScreen(CommonScreen):
                     cache = self.gr_cache.pop(gr, None)
                     if cache is not None:
                         gr.ymax, gr.ymin, gr.y_ticks_major = cache
-                    gr.xlabel = f'{labels[i]} @ {values[-1]:.1f}'
+                    gr.xlabel = f'{self.labels[i]} @ {values[-1]:.1f}'
+                '''
 
+                gr.xlabel = f'{self.labels[i]} @ {values[idx]:.1f}'
                 gr.xmax = len(values)
                 plot.points = enumerate(values)
 
