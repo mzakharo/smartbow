@@ -1,9 +1,9 @@
 #  Project description
 
 * A FitBit for your bow
-* An app to attach a smartphone to a compound bow, and use smartphone's sensors to count arrows shot in a session, as well as review shot stability using Android Orientation API (Accelermoter + Magnetometer).
+* An app to read accelerometer, and orientaiton data from a physically attached to a bow smartphone.
 * Produces a notification on every arrow shot, with notification bar displaying total number of shot arrows for the day.
-* Tested with Galaxy S10
+* Developed and tested on Galaxy S10
 * [Bow phone Mount](https://www.amazon.ca/Smartphone-Camera-Phone-IPhone-Samsung/dp/B00BVF6V5Q)
 
 ![Screenshot](/extra/screenshot1.png?raw=true "Main page")
