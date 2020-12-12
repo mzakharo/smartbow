@@ -79,14 +79,14 @@ class Worker:
         cmd, val = self.q.get()
         if cmd == 'event':
             time, d = val
-            log.info(f'process: {cmd} {time} {d}')
+            log.info(f'{cmd}: time: {time}, data: {d}')
             for field, value in d.items():
                 point = Point(cmd).tag('id', self.id).field(field, value).time(time, WritePrecision.NS)
                 self.send_buffer.append(point)
         elif cmd in ['orientation', 'acceleration']:
             event_time, event_time_idx, buf, time = val
             points = buf[:3]
-            log.info(f'upload: event time {event_time}, buffer time: {time[event_time_idx]}, idx: {event_time_idx}')
+            log.info(f'{cmd}: time: {event_time}, buffer time: {time[event_time_idx]}, idx: {event_time_idx}')
             time -= time[event_time_idx] #center around event time
             time += event_time  #add epoch
             num_points = points.shape[1]
@@ -97,7 +97,7 @@ class Worker:
                     self.send_buffer.append(point)
         elif cmd == 'flush':
             if self.write_api is not None:
-                log.info(f'upload: {len(self.send_buffer)}')
+                log.info(f'{cmd}: {len(self.send_buffer)}')
                 self.write_api.write(self.bucket, self.org, self.send_buffer)
             self.send_buffer = []
         else:
