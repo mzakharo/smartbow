@@ -254,11 +254,14 @@ class OrientationScreen(CommonScreen):
             if event_time_idx == 0: #if we cant match, (acceleration data is fresher than orientation data) assume the last point is closest
                 event_time_idx = len(points_t) - 1
             else:
-                event_time_idx -= 1 # remove one sample, in case it is contaminated with shot
+                #event_time_idx -= 1 # remove one sample, in case it is contaminated with the shot
+                pass
+
             event = {self.labels[i] : v for i, v in enumerate(points[:, event_time_idx])}
             self.worker.q.put(('event', (self.event_time, event)))
             self.worker.q.put(('orientation', (self.event_time, event_time_idx, points, points_t)))
             self.worker.q.put(('flush',None))
+            points = points[:, :event_time_idx] #trim for graph freeze
 
         self.update_cnt += 1
         lookup = {3:'H', 2: 'M', 1:'L'}
@@ -270,50 +273,31 @@ class OrientationScreen(CommonScreen):
             if detected:
                 self.update_cnt = -int(GRAPH_FREEZE / POLL_RATE) #freeze graph after event
 
-                #center graphs
-                fro = -int(sensor_manager.ori.rate)
-                to =  -int(sensor_manager.ori.rate/4)
-                midpoints = np.median(points[:, fro:to], axis=-1)
-
-
             mins = [8, 2, 2]
-            
             for i, plot in enumerate(self.plots):
                 gr = getattr(self.ids, f'graph{i}')
                 values = points[i]
+                midpoint = values[-1]
 
-                idx = -1 if not detected else  event_time_idx
-                midpoint = values[idx]
                 high = np.max(values)
                 low = np.min(values)
 
+                #make sure we can fit the smallest and largest value on the graph
                 span = max(max((high - midpoint), (midpoint - low)), mins[i])
-                gr.ymax = int(midpoint + span)
-                gr.ymin = int(midpoint - span)
+                #ymax candidate
+                cand = int(np.ceil(midpoint + span))
+                #dont resize down unless we reach a threshold
+                if cand > gr.ymax or abs(gr.ymax - cand) > mins[i]:
+                    gr.ymax = cand
+                #ymin candidate
+                cand =  int(np.floor(midpoint - span))
+                #dont resize down unless we reach a threshold
+                if cand < gr.ymin or abs(gr.ymin - cand) > mins[i]:
+                   gr.ymin =  cand
+
                 gr.y_ticks_major = (gr.ymax - gr.ymin) / 5
+                gr.xlabel = f'{self.labels[i]} @ {midpoint:.1f}'
 
-                '''
-                zoom = True
-                if detected and zoom:
-                    if gr not in self.gr_cache:
-                        self.gr_cache[gr] = (gr.ymax, gr.ymin, gr.y_ticks_major)
-                        
-                    #center graphs
-                    midpoint = midpoints[i]
-                    gr.xlabel = f'{self.labels[i]} @ {midpoint:.1f}'
-                    midpoint = int(np.round(midpoint))
-                    ZOOM_DEGREES = 20
-                    gr.ymax = midpoint + ZOOM_DEGREES
-                    gr.ymin = midpoint - ZOOM_DEGREES
-                    gr.y_ticks_major = int((gr.ymax - gr.ymin) / 10)
-                else:
-                    cache = self.gr_cache.pop(gr, None)
-                    if cache is not None:
-                        gr.ymax, gr.ymin, gr.y_ticks_major = cache
-                    gr.xlabel = f'{self.labels[i]} @ {values[-1]:.1f}'
-                '''
-
-                gr.xlabel = f'{self.labels[i]} @ {values[idx]:.1f}'
                 gr.xmax = len(values)
                 plot.points = enumerate(values)
 
