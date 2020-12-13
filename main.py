@@ -77,7 +77,7 @@ class Worker:
 
     def process(self):
         cmd, val = self.q.get()
-        if cmd == 'event':
+        if cmd in ['event', 'std']:
             time, d = val
             log.info(f'{cmd}: time: {time}, data: {d}')
             for field, value in d.items():
@@ -115,6 +115,7 @@ class Worker:
 
 class CommonScreen(Screen):
     event_time = 0
+    accuracy_lookup = {3:'H', 2: 'M', 1:'L'}
 
     def on_press(self):
         if not self.enabled:
@@ -203,7 +204,7 @@ class AccelerometerScreen(CommonScreen):
             gr.ymin = max(-ACCELEROMETER_Y_LIMIT, min(int(points.min()-1), gr.ymax-1))
             gr.xmax = points.shape[1]
             gr.y_ticks_major = max(1 , (gr.ymax - gr.ymin) / 5)
-            gr.xlabel = f'Accelerometer {int(snsr.rate)}/sec. Accuracy: {snsr.accuracy}'
+            gr.xlabel = f'Accelerometer {int(snsr.rate)}/sec. Accuracy: {self.accuracy_lookup.get(snsr.accuracy,"?")}'
             self.px.points = enumerate(points[0])
             self.py.points = enumerate(points[1])
             self.pz.points = enumerate(points[2])
@@ -249,6 +250,8 @@ class OrientationScreen(CommonScreen):
             points = np.degrees(np.array(snsr.q).T)
             points_t = np.array(snsr.tq, dtype=np.int64)
 
+        std = np.std(points, axis=-1)
+
         if detected:
             event_time_idx = np.argmax(points_t >= acc_points_t[self.event_time_idx])
             if event_time_idx == 0: #if we cant match, (acceleration data is fresher than orientation data) assume the last point is closest
@@ -259,13 +262,14 @@ class OrientationScreen(CommonScreen):
 
             event = {self.labels[i] : v for i, v in enumerate(points[:, event_time_idx])}
             self.worker.q.put(('event', (self.event_time, event)))
+            event = {self.labels[i] : v for i, v in enumerate(std)}
+            self.worker.q.put(('std', (self.event_time, event)))
             self.worker.q.put(('orientation', (self.event_time, event_time_idx, points, points_t)))
             self.worker.q.put(('flush',None))
-            points = points[:, :event_time_idx] #trim for graph freeze
+            points = points[:, :event_time_idx + 1] #trim for graph freeze
 
         self.update_cnt += 1
-        lookup = {3:'H', 2: 'M', 1:'L'}
-        self.ids.label.text =  f'#{self.worker.event_count} | rate:{snsr.rate:.1f}@{lookup.get(snsr.accuracy,"?")}'
+        self.ids.label.text =  f'#{self.worker.event_count} | rate:{snsr.rate:.1f}@{self.accuracy_lookup.get(snsr.accuracy,"?")}'
 
         if self.update_cnt == GRAPH_DRAW_EVERY_FRAMES or detected: 
             self.update_cnt = 0
@@ -296,7 +300,7 @@ class OrientationScreen(CommonScreen):
                    gr.ymin =  cand
 
                 gr.y_ticks_major = (gr.ymax - gr.ymin) / 5
-                gr.xlabel = f'{self.labels[i]} @ {midpoint:.1f}'
+                gr.xlabel = f'{self.labels[i]} @ {midpoint:.1f} | stdev: {std[i]:.1f}'
 
                 gr.xmax = len(values)
                 plot.points = enumerate(values)
