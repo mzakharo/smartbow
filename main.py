@@ -77,7 +77,7 @@ class Worker:
 
     def process(self):
         cmd, val = self.q.get()
-        if cmd in ['event', 'std']:
+        if cmd in ['event', 'var']:
             time, d = val
             log.info(f'{cmd}: time: {time}, data: {d}')
             for field, value in d.items():
@@ -264,11 +264,11 @@ class OrientationScreen(CommonScreen):
             self.worker.q.put(('orientation', (self.event_time, event_time_idx, points, points_t)))
             points = points[:, :event_time_idx + 1] #trim for graph freeze
 
-        std = np.std(points, axis=-1)
+        var = np.var(points, axis=-1)
 
         if detected:
-            event = {self.labels[i] : v for i, v in enumerate(std)}
-            self.worker.q.put(('std', (self.event_time, event)))
+            event = {self.labels[i] : v for i, v in enumerate(var)}
+            self.worker.q.put(('var', (self.event_time, event)))
             self.worker.q.put(('flush', None))
 
         self.update_cnt += 1
@@ -303,7 +303,7 @@ class OrientationScreen(CommonScreen):
                    gr.ymin =  cand
 
                 gr.y_ticks_major = (gr.ymax - gr.ymin) / 5
-                gr.xlabel = f'{self.labels[i]} @ {midpoint:.1f} | stdev: {std[i]:.1f}'
+                gr.xlabel = f'{self.labels[i]} @ {midpoint:.1f} | var: {var[i]:.1f}'
 
                 gr.xmax = len(values)
                 plot.points = enumerate(values)
