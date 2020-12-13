@@ -77,7 +77,7 @@ class Worker:
 
     def process(self):
         cmd, val = self.q.get()
-        if cmd in ['event', 'var']:
+        if cmd in ['event', 'std']:
             time, d = val
             log.info(f'{cmd}: time: {time}, data: {d}')
             for field, value in d.items():
@@ -264,11 +264,16 @@ class OrientationScreen(CommonScreen):
             self.worker.q.put(('orientation', (self.event_time, event_time_idx, points, points_t)))
             points = points[:, :event_time_idx + 1] #trim for graph freeze
 
-        var = np.var(points, axis=-1)
+        std_points = max(int(snsr.rate), 10)
+        std = np.std(points[:, -std_points:], axis=-1) * 10
+
+        # azimuth has larger std
+        azimuth_mult = 4
+        std[0] /=  azimuth_mult
 
         if detected:
-            event = {self.labels[i] : v for i, v in enumerate(var)}
-            self.worker.q.put(('var', (self.event_time, event)))
+            event = {self.labels[i] : v for i, v in enumerate(std)}
+            self.worker.q.put(('std', (self.event_time, event)))
             self.worker.q.put(('flush', None))
 
         self.update_cnt += 1
@@ -280,7 +285,7 @@ class OrientationScreen(CommonScreen):
             if detected:
                 self.update_cnt = -int(GRAPH_FREEZE / POLL_RATE) #freeze graph after event
 
-            mins = [8, 2, 2]
+            mins = [int(2 * azimuth_mult), 2, 2]
             for i, plot in enumerate(self.plots):
                 gr = getattr(self.ids, f'graph{i}')
                 values = points[i]
@@ -303,7 +308,7 @@ class OrientationScreen(CommonScreen):
                    gr.ymin =  cand
 
                 gr.y_ticks_major = (gr.ymax - gr.ymin) / 5
-                gr.xlabel = f'{self.labels[i]} @ {midpoint:.1f} | var: {var[i]:.1f}'
+                gr.xlabel = f'{self.labels[i]} @ {midpoint:.1f} | std: {std[i]:.1f}'
 
                 gr.xmax = len(values)
                 plot.points = enumerate(values)

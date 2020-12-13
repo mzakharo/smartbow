@@ -177,7 +177,7 @@ class Dummy:
             if self.type == 'ori':
                 azimuth = np.random.uniform(-np.pi, np.pi)
                 pitch = np.random.uniform(-np.pi/4, np.pi/4)
-                roll = np.random.uniform(-np.pi, 0)
+                roll = np.random.uniform(-np.pi/4, np.pi/4)
                 data = np.array([azimuth, pitch, roll])
             else:
                 data = np.array([random() - 2 , random(), random() + 2 ])
