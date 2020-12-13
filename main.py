@@ -250,7 +250,6 @@ class OrientationScreen(CommonScreen):
             points = np.degrees(np.array(snsr.q).T)
             points_t = np.array(snsr.tq, dtype=np.int64)
 
-        std = np.std(points, axis=-1)
 
         if detected:
             event_time_idx = np.argmax(points_t >= acc_points_t[self.event_time_idx])
@@ -262,11 +261,15 @@ class OrientationScreen(CommonScreen):
 
             event = {self.labels[i] : v for i, v in enumerate(points[:, event_time_idx])}
             self.worker.q.put(('event', (self.event_time, event)))
+            self.worker.q.put(('orientation', (self.event_time, event_time_idx, points, points_t)))
+            points = points[:, :event_time_idx + 1] #trim for graph freeze
+
+        std = np.std(points, axis=-1)
+
+        if detected:
             event = {self.labels[i] : v for i, v in enumerate(std)}
             self.worker.q.put(('std', (self.event_time, event)))
-            self.worker.q.put(('orientation', (self.event_time, event_time_idx, points, points_t)))
-            self.worker.q.put(('flush',None))
-            points = points[:, :event_time_idx + 1] #trim for graph freeze
+            self.worker.q.put(('flush', None))
 
         self.update_cnt += 1
         self.ids.label.text =  f'#{self.worker.event_count} | rate:{snsr.rate:.1f}@{self.accuracy_lookup.get(snsr.accuracy,"?")}'
