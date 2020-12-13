@@ -265,7 +265,7 @@ class OrientationScreen(CommonScreen):
             points = points[:, :event_time_idx + 1] #trim for graph freeze
 
         std_points = max(int(snsr.rate), 10)
-        std = np.std(points[:, -std_points:], axis=-1) * 10
+        std = np.std(points[:, -std_points:], axis=-1) * 10 #multiply by 10x to help visualize
 
         # azimuth has larger std
         azimuth_mult = 4
