@@ -287,7 +287,8 @@ class OrientationScreen(CommonScreen):
             if detected:
                 self.update_cnt = -int(GRAPH_FREEZE / POLL_RATE) #freeze graph after event
 
-            mins = [int(1 * azimuth_mult), 1, 1]
+            x = 1
+            mins = [int(x * azimuth_mult), x, x]
             for i, plot in enumerate(self.plots):
                 gr = getattr(self.ids, f'graph{i}')
                 values = points[i]
