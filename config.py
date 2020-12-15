@@ -1,5 +1,5 @@
+EVENT_THRESH = 55 #when to detect an event
 
-EVENT_THRESH = 60 #when to detect an event
 POLL_RATE = 0.05 #latency on detection vs cpu/usage
 
 GRAPH_DRAW_EVERY_FRAMES = 1 # skip frames, increase on older/slower devices

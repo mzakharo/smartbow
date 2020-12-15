@@ -253,18 +253,20 @@ class OrientationScreen(CommonScreen):
 
         if detected:
             event_time_idx = np.argmax(points_t >= acc_points_t[self.event_time_idx])
-            if event_time_idx == 0: #if we cant match, (acceleration data is fresher than orientation data) assume the last point is closest
-                event_time_idx = len(points_t) - 1
-            else:
-                #event_time_idx -= 1 # remove one sample, in case it is contaminated with the shot
-                pass
 
+            # remove  a few samples that may have been contaminated when the arrow fired
+            point_extra = 3
+            if event_time_idx == 0: #if we cant match
+                event_time_idx = len(points_t) - 1 - point_extra
+            else:
+                event_time_idx -= point_extra
             event = {self.labels[i] : v for i, v in enumerate(points[:, event_time_idx])}
             self.worker.q.put(('event', (self.event_time, event)))
             self.worker.q.put(('orientation', (self.event_time, event_time_idx, points, points_t)))
             points = points[:, :event_time_idx + 1] #trim for graph freeze
 
-        std_points = max(int(snsr.rate), 10)
+        std_points = max(int(snsr.rate/2), 10) #get about 500ms worth of points to determine stability
+
         std = np.std(points[:, -std_points:], axis=-1) * 10 #multiply by 10x to help visualize
 
         # azimuth has larger std
@@ -285,7 +287,7 @@ class OrientationScreen(CommonScreen):
             if detected:
                 self.update_cnt = -int(GRAPH_FREEZE / POLL_RATE) #freeze graph after event
 
-            mins = [int(2 * azimuth_mult), 2, 2]
+            mins = [int(1 * azimuth_mult), 1, 1]
             for i, plot in enumerate(self.plots):
                 gr = getattr(self.ids, f'graph{i}')
                 values = points[i]
