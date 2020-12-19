@@ -40,6 +40,7 @@ class Worker:
         l = QueueLogHandler(self.q)
         formatter = logging.Formatter('%(filename)s-%(funcName)s-L%(lineno)d : %(message)s')
         l.setFormatter(formatter)
+        l.setLevel(logging.INFO)
         log.addHandler(l)
 
         self.today_cache = ''
@@ -49,12 +50,12 @@ class Worker:
                 cache = pickle.load(f)
             self.event_count = cache['event_count']
         except Exception as e:
-            log.info(f"cache: {e}")
+            log.debug(f"cache: {e}")
 
         retries = Retry(connect=5, read=2, redirect=5)
         valid = 'influx_org' in config and 'influx_bucket' in config and 'influx_token' in config and 'influx_url' in config
         if valid:
-            log.info(f"influx: {config['influx_url']}")
+            log.debug(f"influx: {config['influx_url']}")
             self.client = InfluxDBClient(url=config['influx_url'], token=config['influx_token'], timeout=10, retries=retries, enable_gzip=True)
             self.bucket = config['influx_bucket']
             self.org = config['influx_org']
@@ -83,14 +84,14 @@ class Worker:
         cmd, val = self.q.get()
         if cmd in ['event', 'std']:
             time, d = val
-            log.info(f'{cmd}: time: {time}, data: {d}')
+            log.debug(f'{cmd}: time: {time}, data: {d}')
             for field, value in d.items():
                 point = Point(cmd).tag('id', self.id).field(field, value).time(time, WritePrecision.NS)
                 self.send_buffer.append(point)
         elif cmd in ['orientation', 'acceleration']:
             event_time, event_time_idx, buf, time = val
             points = buf[:3]
-            log.info(f'{cmd}: time: {event_time}, buffer time: {time[event_time_idx]}, idx: {event_time_idx}')
+            log.debug(f'{cmd}: time: {event_time}, buffer time: {time[event_time_idx]}, idx: {event_time_idx}')
             time -= time[event_time_idx] #center around event time
             time += event_time  #add epoch
             num_points = points.shape[1]
@@ -101,7 +102,7 @@ class Worker:
                     self.send_buffer.append(point)
         elif cmd == 'flush':
             if self.write_api is not None:
-                log.info(f'{cmd}: {len(self.send_buffer)}')
+                log.debug(f'{cmd}: {len(self.send_buffer)}')
                 self.write_api.write(self.bucket, self.org, self.send_buffer)
             self.send_buffer = []
         elif cmd == 'log':
@@ -136,15 +137,15 @@ class CommonScreen(Screen):
             self.ids.toggle.text = 'START'
 
     def on_enter(self):
-        log.info(f'{self.name}: on enter')
+        log.debug(f'{self.name}: on enter')
         self.start()
 
     def on_leave(self):
-        log.info(f'{self.name}: on leave')
+        log.debug(f'{self.name}: on leave')
         self.stop()
 
     def stop(self):
-        log.info(f'{self.name}: stop')
+        log.debug(f'{self.name}: stop')
         Clock.unschedule(self.get_value)
         self.enabled = False
 
@@ -182,7 +183,7 @@ class AccelerometerScreen(CommonScreen):
         self.enabled = False
 
     def start(self):
-        log.info(f'{self.name}: start')
+        log.debug(f'{self.name}: start')
         if self.first_run:
             self.first_run = False
             self.ids.graph.add_plot(self.px)
@@ -236,7 +237,7 @@ class OrientationScreen(CommonScreen):
         self.labels = ['Azimuth', 'Pitch', 'Roll']
 
     def start(self):
-        log.info(f'{self.name}: start')
+        log.debug(f'{self.name}: start')
         if self.first_run:
             self.first_run = False
             for i, plot in enumerate(self.plots):
@@ -338,7 +339,7 @@ class SmartBow(App):
         config = {}
         path = storagepath.get_external_storage_dir() if platform == 'android' else os.path.join(get_application_dir())#, 'config')
         config_file = os.path.join(path, 'smartbow_config.json')
-        log.info(f'config: {config_file}')
+        log.debug(f'config: {config_file}')
         try:
             if os.path.isfile(config_file):
                 with open(config_file, 'r') as f:
@@ -375,7 +376,7 @@ class SmartBow(App):
         return True
 
 if __name__ == "__main__":
-    log.setLevel(logging.INFO)
+    log.setLevel(logging.DEBUG)
 
     if platform == 'android':
         done = 0 
