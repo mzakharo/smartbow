@@ -1,6 +1,4 @@
-import os
-os.environ["KIVY_NO_FILELOG"] = "1"
-
+from mylog import log, QueueLogHandler, logging
 from kivy.uix.label import Label 
 from kivy.lang import Builder
 from kivy.app import App
@@ -8,8 +6,8 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy_garden.graph import MeshLinePlot, LinePlot
 from kivy.clock import Clock
 from kivy.uix.screenmanager import ScreenManager, Screen
-from kivy.logger import Logger as log
 
+import os
 import time
 import datetime
 import threading
@@ -18,6 +16,7 @@ from plyer import notification
 from compat import sensor_manager, LockScreen, get_application_dir
 from plyer import uniqueid
 
+import influxdb_client
 from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
 from queue import Queue
@@ -25,7 +24,6 @@ from queue import Queue
 from urllib3 import Retry
 from config import *
 import json, pickle
-import traceback
 
 from plyer import storagepath
 from plyer.utils import platform
@@ -37,6 +35,13 @@ def moving_average(a, n=6):
 
 class Worker:
     def __init__(self, config):
+        self.q = Queue()
+
+        l = QueueLogHandler(self.q)
+        formatter = logging.Formatter('%(filename)s-%(funcName)s-L%(lineno)d : %(message)s')
+        l.setFormatter(formatter)
+        log.addHandler(l)
+
         self.today_cache = ''
         self.gen_cache()
         try:
@@ -58,7 +63,6 @@ class Worker:
             log.info('influx: configuration is invalid')
             self.write_api = None
         self.id = uniqueid.id
-        self.q = Queue()
         self.send_buffer = []
         do_th = threading.Thread(target=self.do, daemon=True)
         do_th.start()
@@ -100,6 +104,13 @@ class Worker:
                 log.info(f'{cmd}: {len(self.send_buffer)}')
                 self.write_api.write(self.bucket, self.org, self.send_buffer)
             self.send_buffer = []
+        elif cmd == 'log':
+            point = Point(cmd).tag('id', self.id).time(int(val['created'] * 1e9), WritePrecision.NS).tag('levelno', val['levelno']).field('msg', val['msg'])
+            if self.write_api is not None:
+                try:
+                    self.write_api.write(self.bucket, self.org, point)
+                except influxdb_client.rest.ApiException:
+                    pass # ignore any write errors, or we will get into crazy loop trying to add errors and log them here
         else:
             raise Exception("unknown cmd", cmd)
 
@@ -110,7 +121,6 @@ class Worker:
                 self.process()
             except Exception as e:
                 log.warning(f'do: {e}')
-                traceback.print_exc() 
 
 
 class CommonScreen(Screen):
@@ -256,6 +266,7 @@ class OrientationScreen(CommonScreen):
             
             #if we cant match TODO: this happens more often than expected. figure out why?
             if event_time_idx == 0:
+                log.warning(f"detect: time sync failure.  acc_time: {acc_points_t[self.event_time_idx]}  orient_time: {points_t[-1]}")
                 event_time_idx = len(points_t) - 2
 
             # remove  a few samples that may have been contaminated when the arrow fired
@@ -325,8 +336,9 @@ class SmartBow(App):
 
         #get config
         config = {}
-        path = storagepath.get_external_storage_dir() if platform == 'android' else '.'
+        path = storagepath.get_external_storage_dir() if platform == 'android' else os.path.join(get_application_dir())#, 'config')
         config_file = os.path.join(path, 'smartbow_config.json')
+        log.info(f'config: {config_file}')
         try:
             if os.path.isfile(config_file):
                 with open(config_file, 'r') as f:
@@ -363,6 +375,7 @@ class SmartBow(App):
         return True
 
 if __name__ == "__main__":
+    log.setLevel(logging.INFO)
 
     if platform == 'android':
         done = 0 
@@ -374,4 +387,9 @@ if __name__ == "__main__":
         while not done:
             time.sleep(0.05)
 
-    SmartBow().run()     
+    try:
+        SmartBow().run()     
+    except KeyboardInterrupt:
+        print('kbhit')
+        pass
+
