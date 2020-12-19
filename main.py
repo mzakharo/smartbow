@@ -269,9 +269,8 @@ class OrientationScreen(CommonScreen):
 
         std = np.std(points[:, -std_points:], axis=-1) * 10 #multiply by 10x to help visualize
 
-        # azimuth has larger std
-        azimuth_mult = 4
-        std[0] /=  azimuth_mult
+        az = 4 #azimuth has more error per degree of value
+        std[0] /= az
 
         if detected:
             event = {self.labels[i] : v for i, v in enumerate(std)}
@@ -287,32 +286,30 @@ class OrientationScreen(CommonScreen):
             if detected:
                 self.update_cnt = -int(GRAPH_FREEZE / POLL_RATE) #freeze graph after event
 
-            x = 1
-            mins = [int(x * azimuth_mult), x, x]
+            mins = [az, 1, 1]
             for i, plot in enumerate(self.plots):
                 gr = getattr(self.ids, f'graph{i}')
                 values = points[i]
-                midpoint = values[-1]
 
-                high = np.max(values)
-                low = np.min(values)
+                #kivy graph ymax/ymin have to be integers :(
+                high = int(np.ceil(np.max(values)))
+                low = int(np.floor(np.min(values)))
 
-                #make sure we can fit the smallest and largest value on the graph
-                span = max(max((high - midpoint), (midpoint - low)), mins[i])
-                #ymax candidate
-                cand = int(np.ceil(midpoint + span))
-                #dont resize down unless we reach a threshold
-                if cand > gr.ymax or abs(gr.ymax - cand) > mins[i]:
-                    gr.ymax = cand
-                #ymin candidate
-                cand =  int(np.floor(midpoint - span))
-                #dont resize down unless we reach a threshold
-                if cand < gr.ymin or abs(gr.ymin - cand) > mins[i]:
-                   gr.ymin =  cand
+                #we ensure that graph resolution does not fall beyond limits
+                span = abs(high - low)
+                if span  < mins[i]:
+                    extra = (mins[i] - span) // 2
+                    if extra == 0:
+                        high += 1
+                    else:
+                        high += extra
+                        low -= extra
 
+                #update graph attributes
+                gr.ymax = high
+                gr.ymin = low
                 gr.y_ticks_major = (gr.ymax - gr.ymin) / 5
-                gr.xlabel = f'{self.labels[i]} @ {midpoint:.1f} | std: {std[i]:.1f}'
-
+                gr.xlabel = f'{self.labels[i]} @ {values[-1]:.1f} | std: {std[i]:.1f}'
                 gr.xmax = len(values)
                 plot.points = enumerate(values)
 
