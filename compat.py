@@ -90,7 +90,7 @@ if platform == 'android':
 
         @java_method('(Landroid/hardware/Sensor;I)V')
         def onAccuracyChanged(self, sensor, accuracy):
-            log.info(f"onAccuracyChanged {sensor} {accuracy}")
+            log.info(f"onAccuracyChanged {self.name} {accuracy}")
 
     class AccelerometerSensorListener(SensorListener):
         def __init__(self):

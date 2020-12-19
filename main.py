@@ -284,10 +284,10 @@ class OrientationScreen(CommonScreen):
 
         std = np.std(points[:, -std_points:], axis=-1) * 10 #multiply by 10x to help visualize
 
-        az = 4 #azimuth has more error per degree of value
-        std[0] /= az
-        #roll is way too sensitive (and is less punishing ) -> reduce its importance a bit
-        std[2] /= 2
+        #each axis has a different resolution
+        resolution_adjust = [4, 1, 2]
+
+        std = [std[i] / v for i, v in enumerate(resolution_adjust)]
 
         if detected:
             event = {self.labels[i] : v for i, v in enumerate(std)}
@@ -303,7 +303,6 @@ class OrientationScreen(CommonScreen):
             if detected:
                 self.update_cnt = -int(GRAPH_FREEZE / POLL_RATE) #freeze graph after event
 
-            mins = [az, 1, 1]
             for i, plot in enumerate(self.plots):
                 gr = getattr(self.ids, f'graph{i}')
                 values = points[i]
@@ -314,8 +313,8 @@ class OrientationScreen(CommonScreen):
 
                 #we ensure that graph resolution does not fall beyond limits
                 span = abs(high - low)
-                if span  < mins[i]:
-                    extra = (mins[i] - span) // 2
+                if span  < resolution_adjust[i]:
+                    extra = (resolution_adjust[i] - span) // 2
                     if extra == 0:
                         high += 1
                     else:
