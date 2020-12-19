@@ -1,4 +1,4 @@
-EVENT_THRESH = 55 #when to detect an event
+EVENT_THRESH = 45 #when to detect an event
 
 POLL_RATE = 0.05 #latency on detection vs cpu/usage
 
