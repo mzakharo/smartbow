@@ -253,24 +253,29 @@ class OrientationScreen(CommonScreen):
 
         if detected:
             event_time_idx = np.argmax(points_t >= acc_points_t[self.event_time_idx])
+            
+            #if we cant match TODO: this happens more often than expected. figure out why?
+            if event_time_idx == 0:
+                event_time_idx = len(points_t) - 2
 
             # remove  a few samples that may have been contaminated when the arrow fired
-            point_extra = 3
-            if event_time_idx == 0: #if we cant match
-                event_time_idx = len(points_t) - 1 - point_extra
-            else:
-                event_time_idx -= point_extra
+            event_time_idx -= 3
+
             event = {self.labels[i] : v for i, v in enumerate(points[:, event_time_idx])}
             self.worker.q.put(('event', (self.event_time, event)))
             self.worker.q.put(('orientation', (self.event_time, event_time_idx, points, points_t)))
             points = points[:, :event_time_idx + 1] #trim for graph freeze
 
-        std_points = max(int(snsr.rate/2), 10) #get about 500ms worth of points to determine stability
+        
+
+        std_points = max(int(snsr.rate/(1000 / STD_WINDOW_MS)), 10) #get about 333ms worth of points to determine stability
 
         std = np.std(points[:, -std_points:], axis=-1) * 10 #multiply by 10x to help visualize
 
         az = 4 #azimuth has more error per degree of value
         std[0] /= az
+        #roll is way too sensitive (and is less punishing ) -> reduce its importance a bit
+        std[2] /= 2
 
         if detected:
             event = {self.labels[i] : v for i, v in enumerate(std)}
