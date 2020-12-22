@@ -4,6 +4,7 @@ os.environ["KIVY_NO_FILELOG"] = "1"
 from kivy.logger import Logger as log
 from kivy.logger import LogFile
 import logging
+from influxdb_client import Point, WritePrecision, rest
 class MyLogFile(LogFile):
     def init(self, channel, func):
         self.buffer = ''
@@ -22,15 +23,21 @@ sys.stderr = MyLogFile('stderr', log.error)
 
 
 class QueueLogHandler(logging.StreamHandler):
-    def __init__(self, q):
+    def __init__(self, q, _id=0, write_api=None, bucket=None, org=None):
         super().__init__(self)
         self.q = q
+        self.id = _id
+        self.write_api = write_api
+        self.bucket = bucket
+        self.org = org
     def emit(self, record):
         msg = self.format(record)
-        log = dict(created=record.created,msg=msg,levelno=record.levelno)
-        self.q.put(('log', log))
+        point = Point('log').tag('id', self.id).time(int(record.created * 1e9), WritePrecision.NS).tag('levelno', record.levelno).field('msg', msg)
+        if self.write_api is not None:
+            try:
+                self.write_api.write(self.bucket, self.org, point)
+            except rest.ApiException:
+                pass # ignore any write errors, or we will get into crazy loop trying to add errors and log them here
     def flush(self):
         pass
 
-_logger = logging.getLogger(__name__)
-_logger.disabled = True

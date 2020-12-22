@@ -1,4 +1,5 @@
 EVENT_THRESH = 45 #when to detect an event
+STD_MAX = 7 #stdev above which we skip the event
 
 POLL_RATE = 0.05 #latency on detection vs cpu/usage
 

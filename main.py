@@ -36,12 +36,9 @@ def moving_average(a, n=6):
 class Worker:
     def __init__(self, config):
         self.q = Queue()
-
-        l = QueueLogHandler(self.q)
-        formatter = logging.Formatter('%(filename)s-%(funcName)s-L%(lineno)d : %(message)s')
-        l.setFormatter(formatter)
-        l.setLevel(logging.INFO)
-        log.addHandler(l)
+        self.id = uniqueid.id
+        self.write_api = None
+        self.client = None
 
         self.today_cache = ''
         self.gen_cache()
@@ -60,10 +57,16 @@ class Worker:
             self.bucket = config['influx_bucket']
             self.org = config['influx_org']
             self.write_api = self.client.write_api(write_options=SYNCHRONOUS) #ASYNC does not work due to sem_ impoementation missing
+
+            l = QueueLogHandler(self.q, self.id, self.write_api, self.bucket, self.org)
+            formatter = logging.Formatter('%(filename)s-%(funcName)s-L%(lineno)d : %(message)s')
+            l.setFormatter(formatter)
+            l.setLevel(logging.INFO)
+            log.addHandler(l)
         else:
             log.info('influx: configuration is invalid')
-            self.write_api = None
-        self.id = uniqueid.id
+
+
         self.send_buffer = []
         do_th = threading.Thread(target=self.do, daemon=True)
         do_th.start()
@@ -122,6 +125,10 @@ class Worker:
                 self.process()
             except Exception as e:
                 log.warning(f'do: {e}')
+    def stop(self):
+        if self.client is not None:
+            self.client.close()
+            self.client = None
 
 
 class CommonScreen(Screen):
@@ -158,18 +165,21 @@ class CommonScreen(Screen):
         pmax_i = np.argmax(pmax_a)
         pmax = pmax_a[pmax_i]
         if pmax > EVENT_THRESH and (this_time_ns - self.event_time) > 4 * 1e9: # 4 sec to handle ringing
-            self.worker.register_event()
             self.event_time = np.int64(this_time_ns)
             self.event_time_idx = pmax_i
-            self.message=f'{datetime.datetime.fromtimestamp(this_time_ns / 1e9).strftime("%a, %H:%M:%S")}: Count # {self.worker.event_count}'
-            Clock.schedule_once(self.notify)
-            self.worker.q.put(('event', (self.event_time, dict(value=pmax))))
-            self.worker.q.put(('acceleration', (self.event_time, self.event_time_idx, points, points_t)))
+            self.event_value = pmax
             detected = True
         else:
             detected = False
 
         return detected
+    
+    def send_event(self, points, points_t):
+        self.worker.register_event()
+        self.message=f'{datetime.datetime.fromtimestamp(self.event_time / 1e9).strftime("%a, %H:%M:%S")}: Count # {self.worker.event_count}'
+        Clock.schedule_once(self.notify)
+        self.worker.q.put(('event', (self.event_time, dict(value=self.event_value))))
+        self.worker.q.put(('acceleration', (self.event_time, self.event_time_idx, points, points_t)))
 
 
 class AccelerometerScreen(CommonScreen):
@@ -203,6 +213,7 @@ class AccelerometerScreen(CommonScreen):
             points_t = np.array(snsr.tq, dtype=np.int64)
         detected = self.detect_event(this_time_ns, points, points_t)
         if detected:
+            self.send_event(points, points_t)
             self.worker.q.put(('flush',None))
 
         self.update_cnt += 1
@@ -235,6 +246,8 @@ class OrientationScreen(CommonScreen):
         self.enabled = False
         self.gr_cache = {}
         self.labels = ['Azimuth', 'Pitch', 'Roll']
+        #each axis has a different resolution
+        self.resolution_adjust = [4, 1, 2]
 
     def start(self):
         log.debug(f'{self.name}: start')
@@ -254,42 +267,31 @@ class OrientationScreen(CommonScreen):
             acc_points  = np.array(snsr.q).T
             acc_points_t = np.array(snsr.tq, dtype=np.int64)
 
-        detected = self.detect_event(this_time_ns, acc_points, acc_points_t)
-
         snsr = sensor_manager.ori
         with snsr.lock:
             points = np.degrees(np.array(snsr.q).T)
             points_t = np.array(snsr.tq, dtype=np.int64)
 
+        detected = self.detect_event(this_time_ns, acc_points, acc_points_t)
 
         if detected:
             event_time_idx = np.argmax(points_t >= acc_points_t[self.event_time_idx])
-            
-            #if we cant match TODO: this happens more often than expected. figure out why?
             if event_time_idx == 0:
                 log.warning(f"detect: time sync failure.  acc_time: {acc_points_t[self.event_time_idx]}  orient_time: {points_t[-1]}")
                 event_time_idx = len(points_t) - 2
-
             # remove  a few samples that may have been contaminated when the arrow fired
             event_time_idx -= 3
+            points = points[:, :event_time_idx + 1] #trim for graph freeze
+        
+        std_points = max(int(snsr.rate/(1000 / STD_WINDOW_MS)), 10) #get about 333ms worth of points to determine stability
+        std = np.std(points[:, -std_points:], axis=-1) * 10 #multiply by 10x to help visualize
+        std = [std[i] / v for i, v in enumerate(self.resolution_adjust)]
 
-            event = {self.labels[i] : v for i, v in enumerate(points[:, event_time_idx])}
+        if detected and all(val <= STD_MAX for val in std):
+            self.send_event(acc_points, acc_points_t)
+            event = {self.labels[i] : v for i, v in enumerate(points[:, -1])}
             self.worker.q.put(('event', (self.event_time, event)))
             self.worker.q.put(('orientation', (self.event_time, event_time_idx, points, points_t)))
-            points = points[:, :event_time_idx + 1] #trim for graph freeze
-
-        
-
-        std_points = max(int(snsr.rate/(1000 / STD_WINDOW_MS)), 10) #get about 333ms worth of points to determine stability
-
-        std = np.std(points[:, -std_points:], axis=-1) * 10 #multiply by 10x to help visualize
-
-        #each axis has a different resolution
-        resolution_adjust = [4, 1, 2]
-
-        std = [std[i] / v for i, v in enumerate(resolution_adjust)]
-
-        if detected:
             event = {self.labels[i] : v for i, v in enumerate(std)}
             self.worker.q.put(('std', (self.event_time, event)))
             self.worker.q.put(('flush', None))
@@ -313,8 +315,8 @@ class OrientationScreen(CommonScreen):
 
                 #we ensure that graph resolution does not fall beyond limits
                 span = abs(high - low)
-                if span  < resolution_adjust[i]:
-                    extra = (resolution_adjust[i] - span) // 2
+                if span  < self.resolution_adjust[i]:
+                    extra = (self.resolution_adjust[i] - span) // 2
                     if extra == 0:
                         high += 1
                     else:
@@ -331,6 +333,7 @@ class OrientationScreen(CommonScreen):
 
 class SmartBow(App): 
     def build(self): 
+        self.worker = None
         self.screen = Builder.load_file('look.kv')
         sm = self.screen.ids.sm
 
@@ -346,10 +349,10 @@ class SmartBow(App):
         except PermissionError:
             log.warning(f'build: no permissions to access {config_file}')
 
-        worker = Worker(config=config)
-        screen = OrientationScreen(name='orientation_screen', worker=worker)
+        self.worker = Worker(config=config)
+        screen = OrientationScreen(name='orientation_screen', worker=self.worker)
         sm.add_widget(screen)
-        screen = AccelerometerScreen(name='accelerometer_screen', worker=worker)
+        screen = AccelerometerScreen(name='accelerometer_screen', worker=self.worker)
         sm.add_widget(screen)
 
 
@@ -366,12 +369,15 @@ class SmartBow(App):
         return True
 
     def on_start(self):
+        print(self.worker)
         self.lockscreen = LockScreen()
         self.lockscreen.set()
         sensor_manager.enable()
 
     def on_stop(self):
         sensor_manager.disable()
+        if self.worker is not None:
+            self.worker.stop()
         return True
 
 if __name__ == "__main__":
@@ -387,9 +393,11 @@ if __name__ == "__main__":
         while not done:
             time.sleep(0.05)
 
+    app = SmartBow()
     try:
-        SmartBow().run()     
+        app.run()
     except KeyboardInterrupt:
         print('kbhit')
-        pass
+    finally:
+        app.on_stop()
 
