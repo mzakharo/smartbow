@@ -275,16 +275,22 @@ class OrientationScreen(CommonScreen):
         detected = self.detect_event(this_time_ns, acc_points, acc_points_t)
 
         if detected:
-            event_time_idx = np.argmax(points_t >= acc_points_t[self.event_time_idx])
-            if event_time_idx == 0:
-                log.warning(f"detect: time sync failure.  acc_time: {acc_points_t[self.event_time_idx]}  orient_time: {points_t[-1]}")
-                event_time_idx = len(points_t) - 2
-            # remove  a few samples that may have been contaminated when the arrow fired
+            acc_time = acc_points_t[self.event_time_idx]
+            if acc_time > points_t[-1]: #accelrometer is in the future
+                log.info(f"detect: accelerometer is in the future  acc_time: {acc_time}  orient_time: {points_t[-1]}")
+                event_time_idx = len(points_t) - 1
+            else:
+                event_time_idx = np.argmax(points_t >= acc_points_t[self.event_time_idx])
+                if event_time_idx == 0:
+                    log.warning(f"detect: time sync failure.  acc_time: {acc_time}  orient_time: {points_t[-1]}")
+                    event_time_idx = len(points_t) - 1
+
+            # remove  a few samples that may have been contaminated with the event
             event_time_idx -= 3
-            points = points[:, :event_time_idx + 1] #trim for graph freeze
+            points = points[:, :event_time_idx + 1]
         
-        std_points = max(int(snsr.rate/(1000 / STD_WINDOW_MS)), 10) #get about 333ms worth of points to determine stability
-        std = np.std(points[:, -std_points:], axis=-1) * 10 #multiply by 10x to help visualize
+        std_points = max(int(snsr.rate/(1000 / STD_WINDOW_MS)), 10)
+        std = np.std(points[:, -std_points:], axis=-1) * 10 # multiply by 10x to help visualize with 1 decimal point float
         std = [std[i] / v for i, v in enumerate(self.resolution_adjust)]
 
         if detected and all(val <= STD_MAX for val in std):
@@ -296,9 +302,9 @@ class OrientationScreen(CommonScreen):
             self.worker.q.put(('std', (self.event_time, event)))
             self.worker.q.put(('flush', None))
 
-        self.update_cnt += 1
         self.ids.label.text =  f'#{self.worker.event_count} | rate:{snsr.rate:.1f}@{self.accuracy_lookup.get(snsr.accuracy,"?")}'
 
+        self.update_cnt += 1
         if self.update_cnt == GRAPH_DRAW_EVERY_FRAMES or detected: 
             self.update_cnt = 0
 
