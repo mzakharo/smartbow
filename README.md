@@ -1,6 +1,6 @@
 #  Project description
 
-* A FitBit for your bow using just your smartphone
+* Cyberpunk your bow with your smartphone
 * Count arrows shot
 * Orientation sensor for stability/consistency analsysis
 * Live and instant feedback while you aim
