@@ -288,7 +288,7 @@ class OrientationScreen(CommonScreen):
             # remove  a few samples that may have been contaminated with the event
             event_time_idx -= 3
             orig_points = points
-            orig_points_t = poits_t
+            orig_points_t = points_t
             points = points[:, :event_time_idx + 1]
         
         std_points = max(int(snsr.rate/(1000 / STD_WINDOW_MS)), 10)
