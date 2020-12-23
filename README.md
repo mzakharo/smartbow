@@ -1,10 +1,10 @@
 #  Project description
 
-* A FitBit for your bow
+* A FitBit for your bow using just your smartphone
 * Count arrows shot
 * Orientation sensor for stability/consistency analsysis
 * Live and instant feedback while you aim
-* Auto-freeze screen after each shot for post-mortem investigations
+* Auto-freeze the screen after each shot for post-mortem investigations
 
 <img src="/extra/DSC_0482.JPG"  width="400" height="600"><img src="/extra/DSC_0488.JPG"  width="400" height="600"><img src="/extra/DSC_0480.JPG"  width="400" height="600"> <img src="/extra/wellbeing.png"  width="300" height="600">
 
