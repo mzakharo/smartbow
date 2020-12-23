@@ -1,6 +1,6 @@
 #  Project description
 
-* Cyberpunk your bow with your smartphone
+* Augment your bow with cybertech from your smartphone
 * Count arrows shot
 * Orientation sensor for stability/consistency analsysis
 * Live and instant feedback while you aim
