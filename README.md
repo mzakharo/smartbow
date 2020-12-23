@@ -1,15 +1,17 @@
 #  Project description
 
 * A FitBit for your bow
-* An app to read accelerometer, and orientaiton data from a physically attached to a bow smartphone.
-* Produces a notification on every arrow shot, with notification bar displaying total number of shot arrows for the day.
+* Count arrows shot
+* Orientation sensor for stability/consistency analsysis
+* Live and instant feedback while you aim
+* Auto-freeze screen after shot for post-mortem investigations
+
+<img src="/extra/DSC_0482.JPG"  width="400" height="600"><img src="/extra/DSC_0488.JPG"  width="400" height="600"><img src="/extra/DSC_0480.JPG"  width="400" height="600"> <img src="/extra/wellbeing.png"  width="300" height="600">
+
+
 * Developed and tested on Galaxy S10
 * [Bow phone Mount](https://www.amazon.ca/Smartphone-Camera-Phone-IPhone-Samsung/dp/B00BVF6V5Q)
-
-<img src="/extra/DSC_0482.JPG"  width="400" height="600"><img src="/extra/DSC_0488.JPG"  width="400" height="600"><img src="/extra/DSC_0480.JPG"  width="400" height="600">
-
-* As a bonus, you can also use the 'Digital Wellbeing' app on Android 10+ to track total arrows shot over days.
-![Digital Wellbeing](/extra/wellbeing.png?raw=true "Digital Wellbeing")
+* Use the 'Digital Wellbeing' app on Android 10+ to track total arrows shot over days/weeks
 
 ## Installation
 
