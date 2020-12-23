@@ -6,7 +6,7 @@
 * Developed and tested on Galaxy S10
 * [Bow phone Mount](https://www.amazon.ca/Smartphone-Camera-Phone-IPhone-Samsung/dp/B00BVF6V5Q)
 
-![Screenshot](/extra/DSC_0482.JPG?raw=true "Main page")
+<img src="/extra/DSC_0482.JPG"  width="250" height="400"><img src="/extra/DSC_0488.JPG"  width="250" height="400"><img src="/extra/DSC_0480.JPG"  width="250" height="400">
 
 * As a bonus, you can also use the 'Digital Wellbeing' app on Android 10+ to track total arrows shot over days.
 ![Digital Wellbeing](/extra/wellbeing.png?raw=true "Digital Wellbeing")
