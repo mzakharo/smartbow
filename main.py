@@ -287,6 +287,8 @@ class OrientationScreen(CommonScreen):
 
             # remove  a few samples that may have been contaminated with the event
             event_time_idx -= 3
+            orig_points = points
+            orig_points_t = points_t
             points = points[:, :event_time_idx + 1]
         
         std_points = max(int(snsr.rate/(1000 / STD_WINDOW_MS)), 10)
@@ -297,7 +299,7 @@ class OrientationScreen(CommonScreen):
             self.send_event(acc_points, acc_points_t)
             event = {self.labels[i] : v for i, v in enumerate(points[:, -1])}
             self.worker.q.put(('event', (self.event_time, event)))
-            self.worker.q.put(('orientation', (self.event_time, event_time_idx, points, points_t)))
+            self.worker.q.put(('orientation', (self.event_time, event_time_idx, orig_points, orig_points_t)))
             event = {self.labels[i] : v for i, v in enumerate(std)}
             self.worker.q.put(('std', (self.event_time, event)))
             self.worker.q.put(('flush', None))
