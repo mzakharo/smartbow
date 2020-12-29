@@ -284,6 +284,10 @@ class OrientationScreen(CommonScreen):
                 if event_time_idx == 0:
                     log.warning(f"detect: time sync failure.  acc_time: {acc_time}  orient_time: {points_t[-1]}")
                     event_time_idx = len(points_t) - 1
+                elif event_time_idx == len(points_t) - 1:
+                    log.warning("detect: last index matched")
+
+            log.info(f"detect: ori: idx={event_time_idx}/{len(points_t)-1} buf={points_t[-6:]}\nacc: {self.event_time_idx}/{len(acc_points_t)-1} buf={acc_points_t[-6:]")
 
             # remove  a few samples that may have been contaminated with the event
             event_time_idx -= 3
