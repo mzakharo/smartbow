@@ -276,21 +276,27 @@ class OrientationScreen(CommonScreen):
 
         if detected:
             acc_time = acc_points_t[self.event_time_idx]
+            debug = False
             if acc_time > points_t[-1]: #accelrometer is in the future
-                log.info(f"detect: accelerometer is in the future  acc_time: {acc_time}  orient_time: {points_t[-1]}")
+                log.warning(f"detect: accelerometer is in the future  acc_time: {acc_time}  orient_time: {points_t[-1]}")
                 event_time_idx = len(points_t) - 1
+                debug = True
             else:
                 event_time_idx = np.argmax(points_t >= acc_points_t[self.event_time_idx])
                 if event_time_idx == 0:
                     log.warning(f"detect: time sync failure.  acc_time: {acc_time}  orient_time: {points_t[-1]}")
                     event_time_idx = len(points_t) - 1
+                    debug = True
                 elif event_time_idx == len(points_t) - 1:
                     log.warning("detect: last index matched")
+                    debug = True
 
-            log.info(f"detect: ori: idx={event_time_idx}/{len(points_t)-1} buf={points_t[-6:]}\nacc: {self.event_time_idx}/{len(acc_points_t)-1} buf={acc_points_t[-6:]}")
+            if debug:
+                log.info(f"detect:\nori: idx={event_time_idx}/{len(points_t)-1} buf={points_t[-6:]}\nacc: {self.event_time_idx}/{len(acc_points_t)-1} buf={acc_points_t[-6:]}")
 
-            # remove  a few samples that may have been contaminated with the event
-            event_time_idx -= 3
+            # remove  a few samples that may have been contaminated with the event TODO: use mcmc or some other method to remove contaminated samples?
+            event_time_idx -= 5
+
             orig_points = points
             orig_points_t = points_t
             points = points[:, :event_time_idx + 1]
