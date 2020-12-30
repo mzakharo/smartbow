@@ -247,7 +247,7 @@ class OrientationScreen(CommonScreen):
         self.gr_cache = {}
         self.labels = ['Azimuth', 'Pitch', 'Roll']
         #each axis has a different resolution
-        self.resolution_adjust = [4, 1, 2]
+        self.resolution_adjust = [2, 1, 2]
 
     def start(self):
         log.debug(f'{self.name}: start')
@@ -403,7 +403,7 @@ if __name__ == "__main__":
 
     if platform == 'android':
         done = 0 
-        def callback(a, b):
+        def callback(a, b):./android/platform/build-arm64-v8a/build/bootstrap_builds/sdl2/jni/SDL/src/sensor/android/SDL_androidsensor.c:
             global done
             done += 1
         from android.permissions import request_permissions, Permission
