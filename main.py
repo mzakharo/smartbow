@@ -245,7 +245,7 @@ class OrientationScreen(CommonScreen):
         self.first_run = True
         self.enabled = False
         self.gr_cache = {}
-        self.labels = ['Azimuth', 'Pitch', 'Roll']
+        self.labels = ['Yaw', 'Pitch', 'Roll']
         #each axis has a different resolution
         self.resolution_adjust = [2, 1, 2]
 
