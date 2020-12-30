@@ -333,8 +333,9 @@ class OrientationScreen(CommonScreen):
 
                 #we ensure that graph resolution does not fall beyond limits
                 span = abs(high - low)
-                if span  < self.resolution_adjust[i]:
-                    extra = (self.resolution_adjust[i] - span) // 2
+                res = self.resolution_adjust[i] * 8
+                if span  < res:
+                    extra = (res - span) // 2
                     if extra == 0:
                         high += 1
                     else:
