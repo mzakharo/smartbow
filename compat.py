@@ -12,6 +12,9 @@ from copy import deepcopy
 from config import *
 
 
+#For magnetometer-based orientation sensor
+SENSOR_RATIO = int(np.ceil(DEFAULT_ACCELEROMETER_RATE/DEFAULT_ORIENTATION_RATE))
+
 if platform == 'android':
     from plyer.platforms.android import activity
     from jnius import autoclass
@@ -96,6 +99,7 @@ if platform == 'android':
         def __init__(self):
             super().__init__(default_rate=DEFAULT_ACCELEROMETER_RATE, buffer_len = ACCELEROMETER_BUFFER_LEN)
             self.name = 'acc'
+            self.small_q = deque([0,0,0] * SENSOR_RATIO, maxlen=SENSOR_RATIO)
             self.SensorManager = cast(
                 'android.hardware.SensorManager',
                 activity.getSystemService(Context.SENSOR_SERVICE)
@@ -108,10 +112,47 @@ if platform == 'android':
         def onSensorChanged(self, event):
             self.accuracy = event.accuracy
             with self.lock:
+                self.small_q.append(event.values)
                 self.q.append(event.values)
                 self.tq.append(event.timestamp)
             self.calc_rate(event.timestamp)
 
+    class MagnetometerSensorListener(SensorListener):
+        def __init__(self, acc):
+            super().__init__(default_rate=DEFAULT_ORIENTATION_RATE, buffer_len = ORIENTATION_BUFFER_LEN)
+            self.name = 'ori'
+            self.acc = acc
+            service = activity.getSystemService(Context.SENSOR_SERVICE)
+            self.SensorManager = cast('android.hardware.SensorManager', service)
+            self.sensor = self.SensorManager.getDefaultSensor(
+                Sensor.TYPE_MAGNETIC_FIELD)
+            self.rotation = [0.0] * 9
+            self.remapped_rotation = deepcopy(self.rotation)
+            self.values = [0.0] * 3
+
+        @java_method('(Landroid/hardware/SensorEvent;)V')
+        def onSensorChanged(self, event):
+            with self.lock:
+
+                #get gravity
+                with self.acc.lock:
+                    acc_values = np.array(self.acc.small_q)
+                gravity = list(np.median(acc_values, axis=0))
+
+                self.SensorManager.getRotationMatrix(self.rotation, None, gravity, event.values)
+
+                #from https://developer.android.com/reference/android/hardware/SensorManager#remapCoordinateSystem(float[],%20int,%20int,%20float[]) 
+                #Using the camera (Y axis along the camera's axis) for an augmented reality application where the rotation angles are needed:
+                SensorManager.remapCoordinateSystem(self.rotation, AXIS_X, AXIS_Z, self.remapped_rotation)
+
+                values = deepcopy(self.values)
+                self.SensorManager.getOrientation(self.remapped_rotation, values)
+                with self.lock:
+                    self.q.append(values)
+                    self.tq.append(event.timestamp)
+
+                self.calc_rate(event.timestamp)
+                self.accuracy = event.accuracy
 
 
     class OrientationSensorListener(SensorListener):
@@ -196,7 +237,8 @@ class Accelerometer:
             return
         if platform == 'android':
             self.acc = AccelerometerSensorListener()
-            self.ori = OrientationSensorListener()
+            #self.ori = OrientationSensorListener()
+            self.ori = MagnetometerSensorListener(self.acc)
         else:
             self.acc = Dummy(DEFAULT_ACCELEROMETER_RATE, buffer_len = ACCELEROMETER_BUFFER_LEN)
             self.ori= Dummy(DEFAULT_ORIENTATION_RATE, type='ori', buffer_len=ORIENTATION_BUFFER_LEN)
