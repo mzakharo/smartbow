@@ -403,7 +403,7 @@ if __name__ == "__main__":
 
     if platform == 'android':
         done = 0 
-        def callback(a, b):./android/platform/build-arm64-v8a/build/bootstrap_builds/sdl2/jni/SDL/src/sensor/android/SDL_androidsensor.c:
+        def callback(a, b):
             global done
             done += 1
         from android.permissions import request_permissions, Permission
