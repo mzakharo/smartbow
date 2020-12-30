@@ -166,6 +166,11 @@ if platform == 'android':
 
             values = deepcopy(self.values)
             self.SensorManager.getOrientation(self.remapped_rotation, values)
+
+            #TODO: test this more
+            #use cos theta/2 instead of calculated azimuth, for better accuracy?
+            values[0] = event.values[3]
+
             with self.lock:
                 self.q.append(values)
                 self.tq.append(event.timestamp)
