@@ -247,7 +247,7 @@ class OrientationScreen(CommonScreen):
         self.gr_cache = {}
         self.labels = ['Yaw', 'Pitch', 'Roll']
         #each axis has a different resolution
-        self.resolution_adjust = [2, 1, 2]
+        self.resolution_adjust = [1, 1, 2]
 
     def start(self):
         log.debug(f'{self.name}: start')
