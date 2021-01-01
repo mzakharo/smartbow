@@ -1,8 +1,8 @@
 #  Project description
 
 * Augment your bow with cybertech from your smartphone
-* Count arrows shot
-* Orientation sensor for stability/consistency analsysis
+* Daily arrow shot count
+* Orientation view for stability/consistency analsysis
 * Live and instant feedback while you aim
 * Auto-freeze the screen after each shot for post-mortem investigations
 
