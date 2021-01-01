@@ -6,9 +6,8 @@
 * Live and instant feedback while you aim
 * Auto-freeze the screen after each shot for post-mortem investigations
 
-<img src="/extra/DSC_0482.JPG"  width="400" height="600"><img src="/extra/DSC_0488.JPG"  width="400" height="600"><img src="/extra/DSC_0480.JPG"  width="400" height="600"> <img src="/extra/wellbeing.png"  width="300" height="600">
+<img src="/extra/DSC_0482.JPG"  width="400" height="600"><img src="/extra/DSC_0488.JPG"  width="400" height="600">
 
-* Use the 'Digital Wellbeing' app on Android 10+ to track total arrows shot over weeks
 * Developed and tested with Galaxy S10
 * [Bow phone Mount](https://www.amazon.ca/Smartphone-Camera-Phone-IPhone-Samsung/dp/B00BVF6V5Q)
 
