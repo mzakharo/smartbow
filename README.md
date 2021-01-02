@@ -45,7 +45,7 @@ Download and install [conda](https://docs.conda.io/en/latest/miniconda.html)
  pip install -r  requirements.txt
 ```
 
-## run the app on Ubuntu
+## run the app on the desktop
 ```python main.py```
 
 ## build the mobile .apk
