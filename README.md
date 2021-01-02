@@ -34,19 +34,18 @@ sudo apt install -y git zip unzip openjdk-8-jdk python3-pip autoconf libtool pkg
 sudo apt install ccache
 ```
 
-## Conda on Ubuntu 20.04 install
+## Setup native runtime environment on Ubuntu 20.04
 ```
- # get conda with python 3.8
- sh ./Miniconda3-py38-Linux-x86_64.sh
+ # Download and install [conda](https://docs.conda.io/en/latest/miniconda.html)
  conda install -c conda-forge kivy
  conda install cython numpy
  pip install -r  requirements.txt
 ```
 
-## run the app
+## run the app on Ubuntu
 ```python main.py```
 
-## build the .apk
+## build the mobile .apk
  ```make```
  
 ## install the .apk
