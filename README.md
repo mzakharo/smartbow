@@ -36,9 +36,8 @@ sudo apt install ccache
 
 ## Setup native runtime environment
 
-Tested with Ubuntu 20.04.  Download and install [conda](https://docs.conda.io/en/latest/miniconda.html)
+Tested on Ubuntu 20.04. Download and install [conda](https://docs.conda.io/en/latest/miniconda.html)
 ```
- # 
  conda install -c conda-forge kivy
  conda install cython numpy
  pip install -r  requirements.txt
