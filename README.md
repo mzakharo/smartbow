@@ -34,9 +34,11 @@ sudo apt install -y git zip unzip openjdk-8-jdk python3-pip autoconf libtool pkg
 sudo apt install ccache
 ```
 
-## Setup native runtime environment on Ubuntu 20.04
+## Setup native runtime environment
+
+Tested with Ubuntu 20.04.  Download and install [conda](https://docs.conda.io/en/latest/miniconda.html)
 ```
- # Download and install [conda](https://docs.conda.io/en/latest/miniconda.html)
+ # 
  conda install -c conda-forge kivy
  conda install cython numpy
  pip install -r  requirements.txt
