@@ -24,6 +24,8 @@ Download and install the latest APK from the [Release section](https://github.co
 
 # APK Build instructions
 
+Tested on Ubuntu 20.04.
+
 ## Add to .bashrc
 ```export PATH=$HOME/.local/bin/:$HOME/.buildozer/android/platform/android-sdk/platform-tools/:$PATH```
 
@@ -36,7 +38,7 @@ sudo apt install ccache
 
 ## Setup native runtime environment
 
-Tested on Ubuntu 20.04. Download and install [conda](https://docs.conda.io/en/latest/miniconda.html)
+Download and install [conda](https://docs.conda.io/en/latest/miniconda.html)
 ```
  conda install -c conda-forge kivy
  conda install cython numpy
