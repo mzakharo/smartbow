@@ -1,17 +1,15 @@
 #  Project description
 
 * Augment your bow with cybertech from your smartphone
-* Daily arrow shot count
+* Count arrows shot
 * Orientation view for stability/consistency analsysis
-* Live and instant feedback while you aim
-* Auto-freeze the screen after each shot for post-mortem investigations
 
 <img src="/extra/DSC_0482.JPG"  width="400" height="600"><img src="/extra/DSC_0488.JPG"  width="400" height="600">
 
-* Synchronize with fitbit to display total arrow count
+* Synchronize with fitbit
 <img src="/extra/fitbit.jpg"  width="400" height="600">
 
-* Use Android 10+ Digital Well-being app to tally weekly progress goals
+* Use Android 10+ Digital Well-being app to track weekly progress
 
 * Developed and tested with Galaxy S10
 * [Bow Phone Mount](https://www.amazon.ca/Smartphone-Camera-Phone-IPhone-Samsung/dp/B00BVF6V5Q)
