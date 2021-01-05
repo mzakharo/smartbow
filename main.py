@@ -173,7 +173,7 @@ class CommonScreen(Screen):
     
     def send_event(self, points, points_t):
         self.worker.register_event()
-        self.message=f'# {self.worker.event_count} - {datetime.datetime.fromtimestamp(self.event_time / 1e9).strftime("%H:%M:%S, %a")}'
+        self.message=f'# {self.worker.event_count}'
         Clock.schedule_once(self.notify)
         self.worker.q.put(('event', (self.event_time, dict(value=self.event_value))))
         self.worker.q.put(('acceleration', (self.event_time, points_t[self.event_time_idx], points, points_t)))

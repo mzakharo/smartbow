@@ -169,6 +169,7 @@ class AndroidNotification(Notification):
         noti.setContentTitle(title)
         noti.setContentText(AndroidString(message))
         noti.setTicker(AndroidString(ticker))
+        noti.setShowWhen(True)
 
         # set additional flags for notification
         self._set_icons(noti, icon=icon)
