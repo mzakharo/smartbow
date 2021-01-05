@@ -12,8 +12,7 @@ import time
 import datetime
 import threading
 import numpy as np
-from plyer import notification
-from compat import sensor_manager, LockScreen, get_application_dir
+from compat import sensor_manager, LockScreen, get_application_dir, notification
 from plyer import uniqueid
 
 import influxdb_client
@@ -92,13 +91,11 @@ class Worker:
                 point = Point(cmd).tag('id', self.id).field(field, value).time(time, WritePrecision.NS)
                 self.send_buffer.append(point)
         elif cmd in ['orientation', 'acceleration']:
-            event_time, event_time_idx, buf, time = val
-            points = buf[:3]
-            log.debug(f'{cmd}: time: {event_time}, buffer time: {time[event_time_idx]}, idx: {event_time_idx}')
-            time -= time[event_time_idx] #center around event time
+            event_time, event_time_buf, points, time = val
+            log.debug(f'{cmd}: time: {event_time}, buffer time: {event_time_buf}')
+            time -= event_time_buf #center around event time
             time += event_time  #add epoch
-            num_points = points.shape[1]
-            for i in range(num_points):
+            for i in range(points.shape[1]):
                 values = points[:, i]
                 for idx, value in enumerate(values):
                     point = Point(cmd).tag('id', self.id).tag('idx', idx).field('value', value).time(time[i], WritePrecision.NS)
@@ -176,10 +173,10 @@ class CommonScreen(Screen):
     
     def send_event(self, points, points_t):
         self.worker.register_event()
-        self.message=f'{datetime.datetime.fromtimestamp(self.event_time / 1e9).strftime("%a, %H:%M:%S")}: Count # {self.worker.event_count}'
+        self.message=f'# {self.worker.event_count} - {datetime.datetime.fromtimestamp(self.event_time / 1e9).strftime("%H:%M:%S, %a")}'
         Clock.schedule_once(self.notify)
         self.worker.q.put(('event', (self.event_time, dict(value=self.event_value))))
-        self.worker.q.put(('acceleration', (self.event_time, self.event_time_idx, points, points_t)))
+        self.worker.q.put(('acceleration', (self.event_time, points_t[self.event_time_idx], points, points_t)))
 
 
 class AccelerometerScreen(CommonScreen):
@@ -276,23 +273,20 @@ class OrientationScreen(CommonScreen):
 
         if detected:
             acc_time = acc_points_t[self.event_time_idx]
-            debug = False
-            if acc_time > points_t[-1]: #accelrometer is in the future
-                log.warning(f"detect: accelerometer is in the future  acc_time: {acc_time}  orient_time: {points_t[-1]}")
+            debug = None
+            if acc_time > points_t[-1]:
+                debug = 'accelerometer in future'
                 event_time_idx = len(points_t) - 1
-                debug = True
             else:
-                event_time_idx = np.argmax(points_t >= acc_points_t[self.event_time_idx])
+                event_time_idx = np.argmax(points_t >= acc_time)
                 if event_time_idx == 0:
-                    log.warning(f"detect: time sync failure.  acc_time: {acc_time}  orient_time: {points_t[-1]}")
                     event_time_idx = len(points_t) - 1
-                    debug = True
+                    debug = 'sync failure'
                 elif event_time_idx == len(points_t) - 1:
-                    log.warning("detect: last index matched")
-                    debug = True
+                    debug = 'last match'
 
-            if debug:
-                log.info(f"detect:\nori: idx={event_time_idx}/{len(points_t)-1} buf={points_t[-6:]}\nacc: {self.event_time_idx}/{len(acc_points_t)-1} buf={acc_points_t[-6:]}")
+            if debug is not None:
+                log.warning(f"detect: '{debug}' ori: idx={event_time_idx}/{len(points_t)-1} buf={points_t[-6:]}\nacc_time: {acc_time} acc_idx={self.event_time_idx}/{len(acc_points_t)-1}")
 
             # remove  a few samples that may have been contaminated with the event TODO: use mcmc or some other method to remove contaminated samples?
             event_time_idx -= 5
@@ -309,7 +303,7 @@ class OrientationScreen(CommonScreen):
             self.send_event(acc_points, acc_points_t)
             event = {self.labels[i] : v for i, v in enumerate(points[:, -1])}
             self.worker.q.put(('event', (self.event_time, event)))
-            self.worker.q.put(('orientation', (self.event_time, event_time_idx, orig_points, orig_points_t)))
+            self.worker.q.put(('orientation', (self.event_time, acc_time, orig_points, orig_points_t)))
             event = {self.labels[i] : v for i, v in enumerate(std)}
             self.worker.q.put(('std', (self.event_time, event)))
             self.worker.q.put(('flush', None))
@@ -333,7 +327,7 @@ class OrientationScreen(CommonScreen):
 
                 #we ensure that graph resolution does not fall beyond limits
                 span = abs(high - low)
-                res = self.resolution_adjust[i] * 8
+                res = self.resolution_adjust[i] * 4
                 if span  < res:
                     extra = (res - span) // 2
                     if extra == 0:

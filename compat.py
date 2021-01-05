@@ -262,3 +262,9 @@ def get_application_dir():
     else:
         return storagepath.get_application_dir()
 
+
+if platform == 'android':
+    from notify import AndroidNotification
+    notification = AndroidNotification()
+else:
+    from plyer import notification
