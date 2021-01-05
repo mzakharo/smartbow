@@ -8,6 +8,11 @@
 
 <img src="/extra/DSC_0482.JPG"  width="400" height="600"><img src="/extra/DSC_0488.JPG"  width="400" height="600">
 
+* Synchronize with fitbit to display total arrow count
+<img src="/extra/fitbit.JPG"  width="400" height="600">
+
+* Use Android 10+ Digital Well-being app to tally weekly progress goals
+
 * Developed and tested with Galaxy S10
 * [Bow Phone Mount](https://www.amazon.ca/Smartphone-Camera-Phone-IPhone-Samsung/dp/B00BVF6V5Q)
 
