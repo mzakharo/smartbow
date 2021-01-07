@@ -171,6 +171,9 @@ if platform == 'android':
             #use cos theta/2 instead of calculated azimuth, for better accuracy?
             values[0] = event.values[3]
 
+            #flip pitch direction for graph to follow phone movement
+            values[1] = -values[1]
+
             with self.lock:
                 self.q.append(values)
                 self.tq.append(event.timestamp)
