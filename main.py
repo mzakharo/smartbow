@@ -294,6 +294,8 @@ class OrientationScreen(CommonScreen):
             orig_points = points
             orig_points_t = points_t
             points = points[:, :event_time_idx + 1]
+            ori_time = points_t[event_time_idx]
+            acc_offset = ori_time - acc_time
         
         std_points = max(int(snsr.rate/(1000 / STD_WINDOW_MS)), 10)
         std = np.std(points[:, -std_points:], axis=-1) * 10 # multiply by 10x to help visualize with 1 decimal point float
@@ -302,10 +304,10 @@ class OrientationScreen(CommonScreen):
         if detected and all(val <= STD_MAX for val in std):
             self.send_event(acc_points, acc_points_t)
             event = {self.labels[i] : v for i, v in enumerate(points[:, -1])}
-            self.worker.q.put(('event', (self.event_time, event)))
+            self.worker.q.put(('event', (self.event_time + acc_offset, event)))
             self.worker.q.put(('orientation', (self.event_time, acc_time, orig_points, orig_points_t)))
             event = {self.labels[i] : v for i, v in enumerate(std)}
-            self.worker.q.put(('std', (self.event_time, event)))
+            self.worker.q.put(('std', (self.event_time + acc_offset, event)))
             self.worker.q.put(('flush', None))
 
         self.ids.label.text =  f'#{self.worker.event_count} | rate:{snsr.rate:.1f}@{self.accuracy_lookup.get(snsr.accuracy,"?")}'
@@ -327,7 +329,7 @@ class OrientationScreen(CommonScreen):
 
                 #we ensure that graph resolution does not fall beyond limits
                 span = abs(high - low)
-                res = self.resolution_adjust[i] * 4
+                res = self.resolution_adjust[i] * 2
                 if span  < res:
                     extra = (res - span) // 2
                     if extra == 0:
