@@ -6,9 +6,6 @@
 
 <img src="/extra/DSC_0482.JPG"  width="400" height="600"><img src="/extra/DSC_0488.JPG"  width="400" height="600">
 
-* Synchronize with fitbit
-<img src="/extra/fitbit.jpg"  width="400" height="600">
-
 * Use Android 10+ Digital Well-being app to track weekly progress
 
 * Developed and tested with Galaxy S10
