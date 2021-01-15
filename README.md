@@ -4,7 +4,7 @@
 * Count arrows shot
 * Orientation view for stability/consistency analsysis
 
-<img src="/extra/DSC_0482.JPG"  width="400" height="600"><img src="/extra/DSC_0488.JPG"  width="400" height="600">
+<img src="/extra/DSC_0482.JPG"  width="400" height="600">
 
 * Use Android 10+ Digital Well-being app to track weekly progress
 
