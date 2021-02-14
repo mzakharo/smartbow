@@ -1,10 +1,10 @@
 EVENT_THRESH = 45 #when to detect an event
-STD_MAX = 7 #stdev above which we skip the event
+STD_MAX = 15 #stdev above which we skip the event
 
 POLL_RATE = 0.05 #latency on detection vs cpu/usage
 
 GRAPH_DRAW_EVERY_FRAMES = 1 # skip frames, increase on older/slower devices
-GRAPH_FREEZE = 8  #how many seconds to freeze graphs after shot is detected:w
+GRAPH_FREEZE = 6  #how many seconds to freeze graphs after shot is detected:w
 ACCELEROMETER_Y_LIMIT = 150 #acceleromter graph Y-limit
 
 #some defaults, based on Galaxy S10
