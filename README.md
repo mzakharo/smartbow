@@ -1,3 +1,5 @@
+![APK build](https://github.com/mzakharo/smartbow/workflows/Python%20Package%20using%20Conda/badge.svg)
+
 #  Project description
 
 * Augment your bow with cybertech from your smartphone
@@ -8,8 +10,6 @@
 
 * Developed and tested with Galaxy S10
 * [Bow Phone Mount](https://www.amazon.ca/Smartphone-Camera-Phone-IPhone-Samsung/dp/B00BVF6V5Q)
-
-![Python Package using Conda](https://github.com/mzakharo/smartbow/workflows/Python%20Package%20using%20Conda/badge.svg)
 
 ## Installation
 
