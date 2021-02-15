@@ -21,6 +21,7 @@ jobs:
       with:
           fetch-depth: 1
     - name: Run Makefile
+      working-directory: .
       run: make
     - name: Install dependencies
       run: |
