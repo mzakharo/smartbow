@@ -18,3 +18,6 @@ ORIENTATION_BUFFER_LEN =  200
 STD_WINDOW_MS = 250  #window for calculating std
 
 RAW_MAG = True#use raw magnetometer for orientation sensing
+SMALLQ_BUFFER_LEN = 100 #how much of accelerometer to buffer
+
+

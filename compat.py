@@ -12,9 +12,6 @@ from copy import deepcopy
 from config import *
 
 
-#For magnetometer-based orientation sensor
-SENSOR_RATIO = 3
-
 if platform == 'android':
     from plyer.platforms.android import activity
     from jnius import autoclass
@@ -102,7 +99,7 @@ if platform == 'android':
         def __init__(self):
             super().__init__(default_rate=DEFAULT_ACCELEROMETER_RATE, buffer_len = ACCELEROMETER_BUFFER_LEN)
             self.name = 'acc'
-            self.small_q = deque([0.0,0.0,0.0] * SENSOR_RATIO, maxlen=SENSOR_RATIO)
+            self.small_q = deque([0.0,0.0,0.0] * SMALLQ_BUFFER_LEN, maxlen=SMALLQ_BUFFER_LEN)
             self.sensor = self.SensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
 
         @java_method('(Landroid/hardware/SensorEvent;)V')
