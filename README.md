@@ -1,4 +1,4 @@
-![APK build](https://github.com/mzakharo/smartbow/workflows/Python%20Package%20using%20Conda/badge.svg)
+![APK build using buildozer](https://github.com/mzakharo/smartbow/workflows/APK%20build%20using%20buildozer/badge.svg)
 
 #  Project description
 
