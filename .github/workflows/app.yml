@@ -21,7 +21,7 @@ jobs:
       with:
           fetch-depth: 1
     - name: Run Makefile
-        run: make
+      run: make
     - name: Install dependencies
       run: |
         sudo conda install cython
