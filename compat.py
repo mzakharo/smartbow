@@ -13,7 +13,7 @@ from config import *
 
 
 #For magnetometer-based orientation sensor
-SENSOR_RATIO = 10#int(np.ceil(DEFAULT_ACCELEROMETER_RATE/DEFAULT_ORIENTATION_RATE))
+SENSOR_RATIO = 3
 
 if platform == 'android':
     from plyer.platforms.android import activity
@@ -130,7 +130,7 @@ if platform == 'android':
             #get gravity
             with self.acc.lock:
                 acc_values = np.array(self.acc.small_q)
-            gravity = list(np.mean(acc_values, axis=0))
+            gravity = list(np.median(acc_values, axis=0))
 
             self.SensorManager.getRotationMatrix(self.rotation, None, gravity, event.values)
 
@@ -140,6 +140,9 @@ if platform == 'android':
 
             values = deepcopy(self.values)
             self.SensorManager.getOrientation(self.remapped_rotation, values)
+
+            #flip pitch direction for graph to follow phone movement
+            values[1] = -values[1]
 
             with self.lock:
                 self.q.append(values)
@@ -166,10 +169,6 @@ if platform == 'android':
 
             values = deepcopy(self.values)
             self.SensorManager.getOrientation(self.remapped_rotation, values)
-
-            #TODO: test this more
-            #use cos theta/2 instead of calculated azimuth, for better accuracy?
-            values[0] = event.values[3]
 
             #flip pitch direction for graph to follow phone movement
             values[1] = -values[1]

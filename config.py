@@ -17,4 +17,4 @@ ORIENTATION_BUFFER_LEN =  200
 
 STD_WINDOW_MS = 250  #window for calculating std
 
-RAW_MAG = False #use raw magnetometer for orientation sensing
+RAW_MAG = True#use raw magnetometer for orientation sensing

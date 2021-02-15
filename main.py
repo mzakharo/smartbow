@@ -258,9 +258,9 @@ class OrientationScreen(CommonScreen):
         self.first_run = True
         self.enabled = False
         self.gr_cache = {}
-        self.labels = ['Yaw', 'Pitch', 'Roll']
+        self.labels = ['Azimuth', 'Pitch', 'Roll']
         #each axis has a different resolution
-        self.resolution_adjust = [1, 1, 2]
+        self.resolution_adjust = [4, 1, 4]
 
     def start(self):
         log.debug(f'{self.name}: start')
@@ -345,7 +345,7 @@ class OrientationScreen(CommonScreen):
 
                 #we ensure that graph resolution does not fall beyond limits
                 span = abs(high - low)
-                res = self.resolution_adjust[i] * 2
+                res = self.resolution_adjust[i] * 20
                 if span  < res:
                     extra = (res - span) // 2
                     if extra == 0:
