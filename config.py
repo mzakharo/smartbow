@@ -1,7 +1,7 @@
 EVENT_THRESH = 45 #when to detect an event
 STD_MAX = 20 #stdev above which we skip the event
 
-POLL_RATE = 0.05 #latency on detection vs cpu/usage
+POLL_RATE = 0.2 #latency on detection vs cpu/usage
 
 GRAPH_DRAW_EVERY_FRAMES = 1 # skip frames, increase on older/slower devices
 GRAPH_FREEZE = 4  #how many seconds to freeze graphs after shot is detected:w
@@ -18,6 +18,6 @@ ORIENTATION_BUFFER_LEN =  200
 STD_WINDOW_MS = 250  #window for calculating std
 
 RAW_MAG = True#use raw magnetometer for orientation sensing
-SMALLQ_BUFFER_LEN = 100 #how much of accelerometer to buffer
+SMALLQ_BUFFER_LEN = 10 #how much of accelerometer to buffer
 
 

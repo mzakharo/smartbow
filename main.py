@@ -147,7 +147,7 @@ class CommonScreen(Screen):
     accuracy_lookup = {3:'H', 2: 'M', 1:'L'}
     labels =    ['Azimuth', 'Pitch', 'Roll']
     #each axis has a different resolution
-    resolution_adjust = [8, 1, 2]
+    resolution_adjust = [8, 2, 2]
 
     def on_press(self):
         if not self.enabled:
