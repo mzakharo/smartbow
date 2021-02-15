@@ -18,8 +18,8 @@ jobs:
         # $CONDA is an environment variable pointing to the root of the miniconda directory
         echo $CONDA/bin >> $GITHUB_PATH
     - uses: actions/checkout@v2
-    - name: Set env
-      run: echo "RELEASE_VERSION=1.0" >> $GITHUB_ENV
+    - run: |
+        git fetch --prune --unshallow --tags
     - name: Install dependencies
       run: |
         sudo conda install cython
