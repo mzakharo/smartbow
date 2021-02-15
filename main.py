@@ -145,6 +145,9 @@ class Worker:
 class CommonScreen(Screen):
     event_time = 0
     accuracy_lookup = {3:'H', 2: 'M', 1:'L'}
+    labels =    ['Azimuth', 'Pitch', 'Roll']
+    #each axis has a different resolution
+    resolution_adjust = [4, 1, 4]
 
     def on_press(self):
         if not self.enabled:
@@ -193,86 +196,7 @@ class CommonScreen(Screen):
         self.worker.q.put(('acceleration', (self.event_time, points_t[self.event_time_idx], points, points_t)))
 
 
-class AccelerometerScreen(CommonScreen):
-    def __init__(self, **kwargs):
-        self.worker = kwargs.pop('worker')
-        self.toolbar = kwargs.pop('toolbar')
-        super().__init__(**kwargs)
-        self.px = MeshLinePlot(color=[1, 0, 0, 1])
-        self.py = MeshLinePlot(color=[0, 1, 0, 1])
-        self.pz = MeshLinePlot(color=[1, 1, 0, 1])
-        self.first_run = True
-        self.enabled = False
-
-    def start(self):
-        log.debug(f'{self.name}: start')
-        if self.first_run:
-            self.first_run = False
-            self.ids.graph.add_plot(self.px)
-            self.ids.graph.add_plot(self.py)
-            self.ids.graph.add_plot(self.pz)
-
-        Clock.schedule_interval(self.get_value, POLL_RATE)
-        self.enabled = True
-        self.update_cnt = 0
-
-    def get_value(self, dt):
-        this_time_ns = time.time_ns()
-
-        snsr = sensor_manager.acc
-        with snsr.lock:
-            points = np.array(snsr.q).T
-            points_t = np.array(snsr.tq, dtype=np.int64)
-        detected = self.detect_event(this_time_ns, points, points_t)
-        if detected:
-            self.send_event(points, points_t)
-            self.worker.q.put(('flush',None))
-
-        self.update_cnt += 1
-        if self.update_cnt == GRAPH_DRAW_EVERY_FRAMES or detected:
-            self.update_cnt = 0
-            if detected:
-                self.update_cnt = -int(GRAPH_FREEZE / POLL_RATE) #freeze graph after event
-            gr = self.ids.graph
-            gr.ymax = min(ACCELEROMETER_Y_LIMIT, max(1, int(points.max() + 1)))
-            gr.ymin = max(-ACCELEROMETER_Y_LIMIT, min(int(points.min()-1), gr.ymax-1))
-            gr.xmax = points.shape[1]
-            gr.y_ticks_major = max(1 , (gr.ymax - gr.ymin) / 5)
-            self.toolbar.title =  f'Force. #{self.worker.event_count} | rate:{snsr.rate:.1f}@{self.accuracy_lookup.get(snsr.accuracy,"?")}'
-            self.px.points = enumerate(points[0])
-            self.py.points = enumerate(points[1])
-            self.pz.points = enumerate(points[2])
-
-
-class OrientationScreen(CommonScreen):
-
-    def __init__(self, **kwargs):
-        self.worker = kwargs.pop('worker')
-        self.toolbar = kwargs.pop('toolbar')
-        super().__init__(**kwargs)
-        lw = 2
-        self.plots = [  LinePlot(color=[1, 1, 0, 1], line_width=lw),
-                        LinePlot(color=[0, 1, 0, 1], line_width=lw),
-                        LinePlot(color=[1, 1, 0, 1], line_width=lw),
-                        ]
-        self.first_run = True
-        self.enabled = False
-        self.gr_cache = {}
-        self.labels = ['Azimuth', 'Pitch', 'Roll']
-        #each axis has a different resolution
-        self.resolution_adjust = [4, 1, 4]
-
-    def start(self):
-        log.debug(f'{self.name}: start')
-        if self.first_run:
-            self.first_run = False
-            for i, plot in enumerate(self.plots):
-                getattr(self.ids, f'graph{i}').add_plot(plot)
-        Clock.schedule_interval(self.get_value, POLL_RATE)
-        self.enabled = True
-        self.update_cnt = 0
-
-    def get_value(self, dt):
+    def get_value(self):
         this_time_ns = time.time_ns()
 
         snsr = sensor_manager.acc
@@ -326,7 +250,7 @@ class OrientationScreen(CommonScreen):
             self.worker.q.put(('std', (self.event_time + acc_offset, event)))
             self.worker.q.put(('flush', None))
 
-        self.toolbar.title =  f'Ori. #{self.worker.event_count} | rate:{snsr.rate:.1f}@{self.accuracy_lookup.get(snsr.accuracy,"?")}'
+        self.toolbar.title =  f'{self.name}. #{self.worker.event_count} | rate:{snsr.rate:.1f}@{self.accuracy_lookup.get(snsr.accuracy,"?")}'
 
         self.update_cnt += 1
         if self.update_cnt == GRAPH_DRAW_EVERY_FRAMES or detected: 
@@ -334,7 +258,74 @@ class OrientationScreen(CommonScreen):
 
             if detected:
                 self.update_cnt = -int(GRAPH_FREEZE / POLL_RATE) #freeze graph after event
+            return True, points, std
+        return False, points, std
 
+
+class AccelerometerScreen(CommonScreen):
+    def __init__(self, **kwargs):
+        self.worker = kwargs.pop('worker')
+        self.toolbar = kwargs.pop('toolbar')
+        super().__init__(**kwargs)
+        self.px = MeshLinePlot(color=[1, 0, 0, 1])
+        self.py = MeshLinePlot(color=[0, 1, 0, 1])
+        self.pz = MeshLinePlot(color=[1, 1, 0, 1])
+        self.first_run = True
+        self.enabled = False
+
+    def start(self):
+        log.debug(f'{self.name}: start')
+        if self.first_run:
+            self.first_run = False
+            self.ids.graph.add_plot(self.px)
+            self.ids.graph.add_plot(self.py)
+            self.ids.graph.add_plot(self.pz)
+
+        Clock.schedule_interval(self.get_value, POLL_RATE)
+        self.enabled = True
+        self.update_cnt = 0
+
+    def get_value(self, dt):
+        draw, points, _ = super().get_value()
+        if draw:
+            gr = self.ids.graph
+            gr.ymax = min(ACCELEROMETER_Y_LIMIT, max(1, int(points.max() + 1)))
+            gr.ymin = max(-ACCELEROMETER_Y_LIMIT, min(int(points.min()-1), gr.ymax-1))
+            gr.xmax = points.shape[1]
+            gr.y_ticks_major = max(1 , (gr.ymax - gr.ymin) / 5)
+            self.px.points = enumerate(points[0])
+            self.py.points = enumerate(points[1])
+            self.pz.points = enumerate(points[2])
+
+
+class OrientationScreen(CommonScreen):
+
+    def __init__(self, **kwargs):
+        self.worker = kwargs.pop('worker')
+        self.toolbar = kwargs.pop('toolbar')
+        super().__init__(**kwargs)
+        lw = 2
+        self.plots = [  LinePlot(color=[1, 1, 0, 1], line_width=lw),
+                        LinePlot(color=[0, 1, 0, 1], line_width=lw),
+                        LinePlot(color=[1, 1, 0, 1], line_width=lw),
+                        ]
+        self.first_run = True
+        self.enabled = False
+
+    def start(self):
+        log.debug(f'{self.name}: start')
+        if self.first_run:
+            self.first_run = False
+            for i, plot in enumerate(self.plots):
+                getattr(self.ids, f'graph{i}').add_plot(plot)
+        Clock.schedule_interval(self.get_value, POLL_RATE)
+        self.enabled = True
+        self.update_cnt = 0
+
+    def get_value(self, dt):
+        draw, points, std = super().get_value()
+
+        if draw:
             for i, plot in enumerate(self.plots):
                 gr = getattr(self.ids, f'graph{i}')
                 values = points[i]
@@ -353,7 +344,6 @@ class OrientationScreen(CommonScreen):
                     else:
                         high += extra
                         low -= extra
-
                 #update graph attributes
                 gr.ymax = high
                 gr.ymin = low
@@ -390,9 +380,9 @@ class SmartBow(MDApp):
         self.worker = Worker(config=config)
 
         toolbar = self.screen.ids.toolbar
-        screen = OrientationScreen(name='OrientationScreen', worker=self.worker, toolbar=toolbar)
+        screen = OrientationScreen(name='Ori', worker=self.worker, toolbar=toolbar)
         sm.add_widget(screen)
-        screen = AccelerometerScreen(name='AccelerometerScreen', worker=self.worker, toolbar=toolbar)
+        screen = AccelerometerScreen(name='Force', worker=self.worker, toolbar=toolbar)
         sm.add_widget(screen)
 
 
