@@ -1,22 +1,22 @@
+<ContentNavigationDrawer>:
+    ScrollView:
+        MDList:
+            OneLineListItem:
+                text: "Orientation view"
+                on_press:
+                    root.nav_drawer.set_state("close")
+                    root.screen_manager.current = "OrientationScreen"
+            OneLineListItem:
+                text: "Accelerometer view"
+                on_press:
+                    root.nav_drawer.set_state("close")
+                    root.screen_manager.current = "AccelerometerScreen"
+
 <AccelerometerScreen>:
     BoxLayout:
         orientation: "vertical"
+        size_hint: [1, .9]
         BoxLayout:
-            size_hint: [1, .05]
-            orientation: "horizontal"
-            Button:
-                text: "ORIENTATION"
-                bold: True
-                on_press:
-                    root.manager.transition.direction = 'left'
-                    root.manager.current = 'orientation_screen'
-            Button:
-                id: toggle
-                text: "STOP"
-                bold: True
-                on_press: root.on_press()
-        BoxLayout:
-            size_hint: [1, .95]
             Graph:
                 id: graph
                 y_grid_label : True
@@ -25,26 +25,10 @@
 <OrientationScreen>:
     BoxLayout:
         orientation: "vertical"
-        BoxLayout:
-            size_hint: [1, .05]
-            orientation: "horizontal"
-            Button:
-                text: "FORCE"
-                bold: True
-                on_press:
-                    root.manager.transition.direction = 'right'
-                    root.manager.current = 'accelerometer_screen'
-            Label:
-                id: label
-            Button:
-                id: toggle
-                text: "STOP"
-                bold: True
-                on_press: root.on_press()
+        size_hint: [1, .9]
         BoxLayout:
             orientation: "vertical"
             spacing: 20
-            size_hint: [1, .95]
             Graph:
 #values[0]: Azimuth, angle of rotation about the -z axis. This value represents the angle between the device's y axis and the magnetic north pole. When facing north, this angle is 0, when facing south, this angle is π. Likewise, when facing east, this angle is π/2, and when facing west, this angle is -π/2. The range of values is -π to π.
                 id: graph0
@@ -79,5 +63,21 @@
                 y_ticks_major : 40
 
 Screen:
-    ScreenManager:
-        id: sm
+    MDToolbar:
+        id: toolbar
+        pos_hint: {"top": 1}
+        elevation: 10
+        title: "SmartBow"
+        left_action_items: [["menu", lambda x: nav_drawer.set_state("open")]]
+
+    NavigationLayout:
+        x: toolbar.height
+        ScreenManager:
+            id: screen_manager
+        MDNavigationDrawer:
+            id: nav_drawer
+            ContentNavigationDrawer:
+                screen_manager: screen_manager
+                nav_drawer: nav_drawer
+
+

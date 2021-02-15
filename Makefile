@@ -6,7 +6,8 @@ P4A_RELEASE_KEYALIAS_PASSWD ?= 123456
 dir_path :=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 P4A_RELEASE_KEYSTORE ?= $(dir_path)/keystore/this.keystore
 
-APK=$(shell true ||  ls --sort=time bin/ -r | tail -1)
+BIN= $(shell mkdir -p bin)
+APK=$(shell ls --sort=time bin/ -r | tail -1)
 
 release:
 	python3 version.py

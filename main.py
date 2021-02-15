@@ -7,6 +7,20 @@ from kivy_garden.graph import MeshLinePlot, LinePlot
 from kivy.clock import Clock
 from kivy.uix.screenmanager import ScreenManager, Screen
 
+from kivymd.uix.snackbar import Snackbar
+from kivymd.uix.list import OneLineListItem, MDList
+from kivymd.uix.navigationdrawer import NavigationLayout
+from kivymd.uix.navigationdrawer import MDNavigationDrawer
+
+from kivymd.uix.label import MDLabel
+from kivymd.theming import ThemableBehavior
+
+from kivy.lang import Builder
+from kivy.uix.boxlayout import BoxLayout
+from kivy.properties import ObjectProperty
+from kivymd.app import MDApp
+
+
 import os
 import time
 import datetime
@@ -161,7 +175,7 @@ class CommonScreen(Screen):
         pmax_a = np.abs(points).max(axis=0)
         pmax_i = np.argmax(pmax_a)
         pmax = pmax_a[pmax_i]
-        if pmax > EVENT_THRESH and (this_time_ns - self.event_time) > 4 * 1e9: # 4 sec to handle ringing
+        if pmax > EVENT_THRESH and (this_time_ns - self.event_time) > GRAPH_FREEZE * 1e9: # 4 sec to handle ringing
             self.event_time = np.int64(this_time_ns)
             self.event_time_idx = pmax_i
             self.event_value = pmax
@@ -182,6 +196,7 @@ class CommonScreen(Screen):
 class AccelerometerScreen(CommonScreen):
     def __init__(self, **kwargs):
         self.worker = kwargs.pop('worker')
+        self.toolbar = kwargs.pop('toolbar')
         super().__init__(**kwargs)
         self.px = MeshLinePlot(color=[1, 0, 0, 1])
         self.py = MeshLinePlot(color=[0, 1, 0, 1])
@@ -223,7 +238,7 @@ class AccelerometerScreen(CommonScreen):
             gr.ymin = max(-ACCELEROMETER_Y_LIMIT, min(int(points.min()-1), gr.ymax-1))
             gr.xmax = points.shape[1]
             gr.y_ticks_major = max(1 , (gr.ymax - gr.ymin) / 5)
-            gr.xlabel = f'Accelerometer {int(snsr.rate)}/sec. Accuracy: {self.accuracy_lookup.get(snsr.accuracy,"?")}'
+            self.toolbar.title =  f'Force. #{self.worker.event_count} | rate:{snsr.rate:.1f}@{self.accuracy_lookup.get(snsr.accuracy,"?")}'
             self.px.points = enumerate(points[0])
             self.py.points = enumerate(points[1])
             self.pz.points = enumerate(points[2])
@@ -233,6 +248,7 @@ class OrientationScreen(CommonScreen):
 
     def __init__(self, **kwargs):
         self.worker = kwargs.pop('worker')
+        self.toolbar = kwargs.pop('toolbar')
         super().__init__(**kwargs)
         lw = 2
         self.plots = [  LinePlot(color=[1, 1, 0, 1], line_width=lw),
@@ -310,7 +326,7 @@ class OrientationScreen(CommonScreen):
             self.worker.q.put(('std', (self.event_time + acc_offset, event)))
             self.worker.q.put(('flush', None))
 
-        self.ids.label.text =  f'#{self.worker.event_count} | rate:{snsr.rate:.1f}@{self.accuracy_lookup.get(snsr.accuracy,"?")}'
+        self.toolbar.title =  f'Ori. #{self.worker.event_count} | rate:{snsr.rate:.1f}@{self.accuracy_lookup.get(snsr.accuracy,"?")}'
 
         self.update_cnt += 1
         if self.update_cnt == GRAPH_DRAW_EVERY_FRAMES or detected: 
@@ -346,11 +362,18 @@ class OrientationScreen(CommonScreen):
                 gr.xmax = len(values)
                 plot.points = enumerate(values)
 
-class SmartBow(App): 
+class ContentNavigationDrawer(BoxLayout):
+    screen_manager = ObjectProperty()
+    nav_drawer = ObjectProperty()
+
+
+class SmartBow(MDApp): 
     def build(self): 
         self.worker = None
         self.screen = Builder.load_file('look.kv')
-        sm = self.screen.ids.sm
+        sm = self.screen.ids.screen_manager
+        #self.theme_cls.primary_palette = "DeepPurple"
+        self.theme_cls.theme_style = "Dark"
 
         #get config
         config = {}
@@ -365,9 +388,11 @@ class SmartBow(App):
             log.warning(f'build: no permissions to access {config_file}')
 
         self.worker = Worker(config=config)
-        screen = OrientationScreen(name='orientation_screen', worker=self.worker)
+
+        toolbar = self.screen.ids.toolbar
+        screen = OrientationScreen(name='OrientationScreen', worker=self.worker, toolbar=toolbar)
         sm.add_widget(screen)
-        screen = AccelerometerScreen(name='accelerometer_screen', worker=self.worker)
+        screen = AccelerometerScreen(name='AccelerometerScreen', worker=self.worker, toolbar=toolbar)
         sm.add_widget(screen)
 
 
