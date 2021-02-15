@@ -18,7 +18,7 @@ jobs:
         # $CONDA is an environment variable pointing to the root of the miniconda directory
         echo $CONDA/bin >> $GITHUB_PATH
     - uses: actions/checkout@master
-        with:
+      with:
           fetch-depth: 1
     - name: Run Makefile
         run: make
