@@ -362,7 +362,7 @@ class SmartBow(MDApp):
         self.worker = None
         self.screen = Builder.load_file('look.kv')
         sm = self.screen.ids.screen_manager
-        #self.theme_cls.primary_palette = "DeepPurple"
+        self.theme_cls.primary_palette = "DeepPurple"
         self.theme_cls.theme_style = "Dark"
 
         #get config
