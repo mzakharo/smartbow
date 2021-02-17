@@ -13,7 +13,7 @@
 
 ## Installation
 
-Download and install the latest APK from the [Release section](https://github.com/mzakharo/smartbow/releases)
+Download and install the latest APK from the Artifacts of the [Actions section](https://github.com/mzakharo/smartbow/actions)
 
 ##  InfluxDB setup (Optional)
 
