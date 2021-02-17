@@ -215,7 +215,7 @@ class CommonScreen(Screen):
             acc_time = acc_points_t[self.event_time_idx]
             debug = None
             if acc_time > points_t[-1]:
-                debug = 'accelerometer in future'
+                debug = 'accelerometer in the future'
                 event_time_idx = len(points_t) - 1
             else:
                 event_time_idx = np.argmax(points_t >= acc_time)
@@ -229,7 +229,7 @@ class CommonScreen(Screen):
                 log.warning(f"detect: '{debug}' ori: idx={event_time_idx}/{len(points_t)-1} buf={points_t[-6:]}\nacc_time: {acc_time} acc_idx={self.event_time_idx}/{len(acc_points_t)-1}")
 
             # remove  a few samples that may have been contaminated with the event TODO: use mcmc or some other method to remove contaminated samples?
-            event_time_idx -= 5
+            event_time_idx -= 7
 
             orig_points = points
             orig_points_t = points_t
@@ -258,8 +258,8 @@ class CommonScreen(Screen):
 
             if detected:
                 self.update_cnt = -int(GRAPH_FREEZE / POLL_RATE) #freeze graph after event
-            return True, points, std
-        return False, points, std
+            return True, acc_points, points, std
+        return False, acc_points, points, std
 
 
 class AccelerometerScreen(CommonScreen):
@@ -286,7 +286,7 @@ class AccelerometerScreen(CommonScreen):
         self.update_cnt = 0
 
     def get_value(self, dt):
-        draw, points, _ = super().get_value()
+        draw, points, _, _ = super().get_value()
         if draw:
             gr = self.ids.graph
             gr.ymax = min(ACCELEROMETER_Y_LIMIT, max(1, int(points.max() + 1)))
@@ -323,7 +323,7 @@ class OrientationScreen(CommonScreen):
         self.update_cnt = 0
 
     def get_value(self, dt):
-        draw, points, std = super().get_value()
+        draw, _, points, std = super().get_value()
 
         if draw:
             for i, plot in enumerate(self.plots):
