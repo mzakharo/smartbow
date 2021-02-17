@@ -172,7 +172,7 @@ class CommonScreen(Screen):
         self.enabled = False
 
     def notify(self, dt):
-        notification.notify(title='>-------->', message=self.message)           
+        notification.notify(title='>>---->', message=self.message)
 
     def detect_event(self, this_time_ns, points, points_t):
         self.worker.gen_cache()
@@ -191,7 +191,7 @@ class CommonScreen(Screen):
     
     def send_event(self, points, points_t):
         self.worker.register_event()
-        self.message=f'# {self.worker.event_count}'
+        self.message=f'Arrow: #{self.worker.event_count}'
         Clock.schedule_once(self.notify)
         self.worker.q.put(('event', (self.event_time, dict(value=self.event_value))))
         self.worker.q.put(('acceleration', (self.event_time, points_t[self.event_time_idx], points, points_t)))
