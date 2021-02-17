@@ -144,7 +144,8 @@ class Worker:
 
 class CommonScreen(Screen):
     event_time = 0
-    accuracy_lookup = {3:'H', 2: 'M', 1:'L'}
+    update_cnt = 0
+    accuracy_lookup = {3:'High', 2: 'Med', 1:'Low'}
     labels =    ['Azimuth', 'Pitch', 'Roll']
     #each axis has a different resolution
     resolution_adjust = [8, 2, 2]
@@ -228,7 +229,7 @@ class CommonScreen(Screen):
             if debug is not None:
                 log.warning(f"detect: '{debug}' ori: idx={event_time_idx}/{len(points_t)-1} buf={points_t[-6:]}\nacc_time: {acc_time} acc_idx={self.event_time_idx}/{len(acc_points_t)-1}")
 
-            # remove  a few samples that may have been contaminated with the event TODO: use mcmc or some other method to remove contaminated samples?
+            # remove  a few samples that may have been contaminated with the event TODO: use mcmc or some other method to find transition
             event_time_idx -= 7
 
             orig_points = points
@@ -250,7 +251,7 @@ class CommonScreen(Screen):
             self.worker.q.put(('std', (self.event_time + acc_offset, event)))
             self.worker.q.put(('flush', None))
 
-        self.toolbar.title =  f'{self.name}. #{self.worker.event_count} | rate:{snsr.rate:.1f}@{self.accuracy_lookup.get(snsr.accuracy,"?")}'
+        self.toolbar.title =  f'{self.name} | #{self.worker.event_count} | Data:{snsr.rate:.1f}/sec | {self.accuracy_lookup.get(snsr.accuracy,"?")}'
 
         self.update_cnt += 1
         if self.update_cnt == GRAPH_DRAW_EVERY_FRAMES or detected: 
@@ -260,6 +261,24 @@ class CommonScreen(Screen):
                 self.update_cnt = -int(GRAPH_FREEZE / POLL_RATE) #freeze graph after event
             return True, acc_points, points, std
         return False, acc_points, points, std
+
+
+class MainScreen(CommonScreen):
+    def __init__(self, **kwargs):
+        self.worker = kwargs.pop('worker')
+        self.toolbar = kwargs.pop('toolbar')
+        super().__init__(**kwargs)
+
+    def start(self):
+        log.debug(f'{self.name}: start')
+        Clock.schedule_interval(self.get_value, POLL_RATE)
+        self.ids.label.text = f'# {self.worker.event_count}'
+
+    def get_value(self, dt):
+        draw, _, _, _ = super().get_value()
+        if not draw:
+            return
+        self.ids.label.text = f'# {self.worker.event_count}'
 
 
 class AccelerometerScreen(CommonScreen):
@@ -362,7 +381,7 @@ class SmartBow(MDApp):
         self.worker = None
         self.screen = Builder.load_file('look.kv')
         sm = self.screen.ids.screen_manager
-        self.theme_cls.primary_palette = "DeepPurple"
+        self.theme_cls.primary_palette = "Teal"
         self.theme_cls.theme_style = "Dark"
 
         #get config
@@ -380,6 +399,8 @@ class SmartBow(MDApp):
         self.worker = Worker(config=config)
 
         toolbar = self.screen.ids.toolbar
+        screen = MainScreen(name='Main', worker=self.worker, toolbar=toolbar)
+        sm.add_widget(screen)
         screen = OrientationScreen(name='Ori', worker=self.worker, toolbar=toolbar)
         sm.add_widget(screen)
         screen = AccelerometerScreen(name='Force', worker=self.worker, toolbar=toolbar)

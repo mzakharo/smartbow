@@ -2,12 +2,17 @@
     ScrollView:
         MDList:
             OneLineListItem:
-                text: "Orientation view"
+                text: "Main"
+                on_press:
+                    root.nav_drawer.set_state("close")
+                    root.screen_manager.current = "Main"
+            OneLineListItem:
+                text: "Orientation"
                 on_press:
                     root.nav_drawer.set_state("close")
                     root.screen_manager.current = "Ori"
             OneLineListItem:
-                text: "Accelerometer view"
+                text: "Accelerometer"
                 on_press:
                     root.nav_drawer.set_state("close")
                     root.screen_manager.current = "Force"
@@ -80,4 +85,14 @@ Screen:
                 screen_manager: screen_manager
                 nav_drawer: nav_drawer
 
-
+<MainScreen>:
+    BoxLayout:
+        orientation: "vertical"
+        size_hint: [1, 1]
+        BoxLayout:
+		MDLabel:
+		    id: label
+		    text: "# 1"
+		    halign: "center"
+		    theme_text_color: "Primary"
+		    font_style: "H1"
