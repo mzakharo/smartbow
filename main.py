@@ -30,10 +30,11 @@ from compat import sensor_manager, LockScreen, get_application_dir, notification
 from plyer import uniqueid
 
 import influxdb_client
-from influxdb_client import InfluxDBClient, Point, WritePrecision
+from influxdb_client import InfluxDBClient, Point, WritePrecision, rest
 from influxdb_client.client.write_api import SYNCHRONOUS
 from queue import Queue
 
+import urllib3
 from urllib3 import Retry
 from config import *
 import json, pickle
@@ -62,8 +63,8 @@ class Worker:
         except Exception as e:
             log.debug(f"cache: {e}")
 
-        retries = Retry(connect=5, read=2, redirect=5)
-        valid = 'influx_org' in config and 'influx_bucket' in config and 'influx_token' in config and 'influx_url' in config
+        retries = Retry(connect=3, read=2, redirect=3)
+        valid = 'influx_org' in config and 'influx_bucket' in config and 'influx_token' in config and 'influx_url' in config # and config['influx_token'] != 'token'
         if valid:
             log.debug(f"influx: {config['influx_url']}")
             self.client = InfluxDBClient(url=config['influx_url'], token=config['influx_token'], timeout=10, retries=retries, enable_gzip=True)
@@ -117,15 +118,19 @@ class Worker:
         elif cmd == 'flush':
             if self.write_api is not None:
                 log.debug(f'{cmd}: {len(self.send_buffer)}')
-                self.write_api.write(self.bucket, self.org, self.send_buffer)
+                try:
+                    self.write_api.write(self.bucket, self.org, self.send_buffer)
+                except (rest.ApiException, urllib3.exceptions.MaxRetryError):
+                    pass
+
             self.send_buffer = []
         elif cmd == 'log':
             point = Point(cmd).tag('id', self.id).time(int(val['created'] * 1e9), WritePrecision.NS).tag('levelno', val['levelno']).field('msg', val['msg'])
             if self.write_api is not None:
                 try:
                     self.write_api.write(self.bucket, self.org, point)
-                except influxdb_client.rest.ApiException:
-                    pass # ignore any write errors, or we will get into crazy loop trying to add errors and log them here
+                except (rest.ApiException, urllib3.exceptions.MaxRetryError):
+                    pass
         else:
             raise Exception("unknown cmd", cmd)
 

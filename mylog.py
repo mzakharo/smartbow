@@ -5,6 +5,7 @@ from kivy.logger import Logger as log
 from kivy.logger import LogFile
 import logging
 from influxdb_client import Point, WritePrecision, rest
+import urllib3
 class MyLogFile(LogFile):
     def init(self, channel, func):
         self.buffer = ''
@@ -36,8 +37,8 @@ class QueueLogHandler(logging.StreamHandler):
         if self.write_api is not None:
             try:
                 self.write_api.write(self.bucket, self.org, point)
-            except rest.ApiException:
-                pass # ignore any write errors, or we will get into crazy loop trying to add errors and log them here
+            except (rest.ApiException, urllib3.exceptions.MaxRetryError):
+                pass
     def flush(self):
         pass
 
