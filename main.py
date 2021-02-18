@@ -160,6 +160,7 @@ class CommonScreen(Screen):
 
     def on_enter(self):
         log.debug(f'{self.name}: on enter')
+        self.toolbar.title =  f'{self.name}'
         self.start()
 
     def on_leave(self):
@@ -251,7 +252,7 @@ class CommonScreen(Screen):
             self.worker.q.put(('std', (self.event_time + acc_offset, event)))
             self.worker.q.put(('flush', None))
 
-        self.toolbar.title =  f'{self.name} | #{self.worker.event_count} | Data:{snsr.rate:.1f}/sec | {self.accuracy_lookup.get(snsr.accuracy,"?")}'
+        #self.toolbar.title =  f'{self.name} | #{self.worker.event_count} | Data:{snsr.rate:.1f}/sec | {self.accuracy_lookup.get(snsr.accuracy,"?")}'
 
         self.update_cnt += 1
         if self.update_cnt == GRAPH_DRAW_EVERY_FRAMES or detected: 
@@ -399,11 +400,11 @@ class SmartBow(MDApp):
         self.worker = Worker(config=config)
 
         toolbar = self.screen.ids.toolbar
-        screen = MainScreen(name='Main', worker=self.worker, toolbar=toolbar)
+        screen = MainScreen(name='ArrowCounter', worker=self.worker, toolbar=toolbar)
         sm.add_widget(screen)
-        screen = OrientationScreen(name='Ori', worker=self.worker, toolbar=toolbar)
+        screen = OrientationScreen(name='Orientation', worker=self.worker, toolbar=toolbar)
         sm.add_widget(screen)
-        screen = AccelerometerScreen(name='Force', worker=self.worker, toolbar=toolbar)
+        screen = AccelerometerScreen(name='Accelerometer', worker=self.worker, toolbar=toolbar)
         sm.add_widget(screen)
 
 

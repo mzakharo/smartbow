@@ -2,20 +2,20 @@
     ScrollView:
         MDList:
             OneLineListItem:
-                text: "Main"
+                text: "ArrowCounter"
                 on_press:
                     root.nav_drawer.set_state("close")
-                    root.screen_manager.current = "Main"
+                    root.screen_manager.current = "ArrowCounter"
             OneLineListItem:
                 text: "Orientation"
                 on_press:
                     root.nav_drawer.set_state("close")
-                    root.screen_manager.current = "Ori"
+                    root.screen_manager.current = "Orientation"
             OneLineListItem:
                 text: "Accelerometer"
                 on_press:
                     root.nav_drawer.set_state("close")
-                    root.screen_manager.current = "Force"
+                    root.screen_manager.current = "Accelerometer"
 
 <AccelerometerScreen>:
     BoxLayout:
