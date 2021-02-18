@@ -1,5 +1,5 @@
 EVENT_THRESH = 45 #when to detect an event
-STD_MAX = 20 #stdev above which we skip the event
+STD_MAX = 15 #stdev above which we skip the event
 
 POLL_RATE = 0.1 #latency on detection vs cpu/usage
 
@@ -17,7 +17,7 @@ ORIENTATION_BUFFER_LEN =  200
 
 STD_WINDOW_MS = 250  #window for calculating std
 
-RAW_MAG = True#use raw magnetometer for orientation sensing
+RAW_MAG = False #use raw magnetometer for orientation sensing
 SMALLQ_BUFFER_LEN = 10 #how much of accelerometer to buffer
 
 
