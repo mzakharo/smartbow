@@ -3,7 +3,7 @@ from kivy.uix.label import Label
 from kivy.lang import Builder
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
-from kivy_garden.graph import MeshLinePlot, LinePlot
+from kivy_garden.graph import MeshLinePlot, LinePlot, BarPlot
 from kivy.clock import Clock
 from kivy.uix.screenmanager import ScreenManager, Screen
 
@@ -19,7 +19,6 @@ from kivy.lang import Builder
 from kivy.uix.boxlayout import BoxLayout
 from kivy.properties import ObjectProperty
 from kivymd.app import MDApp
-
 
 import os
 import time
@@ -91,6 +90,15 @@ class Worker:
         if today not in self.today_cache:
             self.event_count = 0
             self.today_cache = os.path.join(get_application_dir(), f'cache-{today}.pickle')
+
+    def get_cache(self, day):
+        cache_file = os.path.join(get_application_dir(), f'cache-{day}.pickle')
+        try:
+            with open(cache_file, 'rb') as f:
+                return pickle.load(f)
+        except Exception as e:
+            return None
+
 
     def register_event(self):
         self.event_count += 1
@@ -269,24 +277,6 @@ class CommonScreen(Screen):
         return False, acc_points, points, std
 
 
-class MainScreen(CommonScreen):
-    def __init__(self, **kwargs):
-        self.worker = kwargs.pop('worker')
-        self.toolbar = kwargs.pop('toolbar')
-        super().__init__(**kwargs)
-
-    def start(self):
-        log.debug(f'{self.name}: start')
-        Clock.schedule_interval(self.get_value, POLL_RATE)
-        self.ids.label.text = f'# {self.worker.event_count}'
-
-    def get_value(self, dt):
-        draw, _, _, _ = super().get_value()
-        if not draw:
-            return
-        self.ids.label.text = f'# {self.worker.event_count}'
-
-
 class AccelerometerScreen(CommonScreen):
     def __init__(self, **kwargs):
         self.worker = kwargs.pop('worker')
@@ -380,6 +370,39 @@ class OrientationScreen(CommonScreen):
 class ContentNavigationDrawer(BoxLayout):
     screen_manager = ObjectProperty()
     nav_drawer = ObjectProperty()
+
+
+class MainScreen(CommonScreen):
+    def __init__(self, **kwargs):
+        self.worker = kwargs.pop('worker')
+        self.toolbar = kwargs.pop('toolbar')
+        super().__init__(**kwargs)
+        self.graph = self.ids.graph
+        self.bar = BarPlot(bar_width=30)
+        self.graph.add_plot(self.bar)
+
+    def draw(self):
+        self.ids.label.text = f'# {self.worker.event_count}'
+
+        vals = []
+        for i in range(8):
+            day = datetime.date.today() - datetime.timedelta(days=i)
+            cache = self.worker.get_cache(day)
+            event_count = cache['event_count'] if cache is not None  else 0
+            vals.append(event_count)
+        self.bar.points = enumerate(vals)
+
+
+    def start(self):
+        log.debug(f'{self.name}: start')
+        Clock.schedule_interval(self.get_value, POLL_RATE)
+        self.draw()
+
+    def get_value(self, dt):
+        draw, _, _, _ = super().get_value()
+        if draw:
+            self.draw()
+
 
 
 class SmartBow(MDApp): 
