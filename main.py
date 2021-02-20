@@ -371,6 +371,9 @@ class ContentNavigationDrawer(BoxLayout):
     screen_manager = ObjectProperty()
     nav_drawer = ObjectProperty()
 
+def myround(x, base=25):
+    return base * round(x/base) + base
+
 
 class MainScreen(CommonScreen):
     def __init__(self, **kwargs):
@@ -385,13 +388,16 @@ class MainScreen(CommonScreen):
         self.ids.label.text = f'# {self.worker.event_count}'
 
         vals = []
+        max_vals = 0
         for i in range(8):
             day = datetime.date.today() - datetime.timedelta(days=i)
             cache = self.worker.get_cache(day)
             event_count = cache['event_count'] if cache is not None  else 0
+            if event_count > max_vals:
+                max_vals = event_count
             vals.append(event_count)
         self.bar.points = enumerate(vals)
-
+        self.graph.ymax = max(125, myround(max_vals))
 
     def start(self):
         log.debug(f'{self.name}: start')
