@@ -50,7 +50,7 @@ requirements = python3,kivy==2.0.0,kivymd,plyer,kivy_garden.graph,numpy,influxdb
 presplash.filename = %(source.dir)s/data/smartbow2-01.png
 
 # (str) Icon of the application
-icon.filename = %(source.dir)s/data/smartbow2-04.png
+icon.filename = %(source.dir)s/data/smartbow2-04-512.png
 
 # (str) Supported orientation (one of landscape, sensorLandscape, portrait or all)
 orientation = portrait
