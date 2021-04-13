@@ -12,8 +12,8 @@
 * [Bow Phone Mount](https://www.amazon.ca/Smartphone-Camera-Phone-IPhone-Samsung/dp/B00BVF6V5Q)
 
 ## Installation
-
-Download and install the latest APK from the Artifacts of the [Actions section](https://github.com/mzakharo/smartbow/actions)
+ - Method 1 : [Play Store](https://play.google.com/store/apps/details?id=org.org.smartbow)
+ - Method 2 : Download and install the latest APK from the Artifacts of the [Actions section](https://github.com/mzakharo/smartbow/actions)
 
 ##  InfluxDB setup (Optional)
 
